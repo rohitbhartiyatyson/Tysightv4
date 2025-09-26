@@ -1,0 +1,162 @@
+[
+  {
+    "original_name": "%ACV",
+    "canonical_name": "acv_pct",
+    "type": "Location measure",
+    "description": "All Commodity Volume distribution (%)",
+    "data_type": "decimal",
+    "format_hint": "numeric"
+  },
+  {
+    "original_name": "%ACV YA",
+    "canonical_name": "acv_pct_ya",
+    "type": "Location measure",
+    "description": "All Commodity Volume distribution (%)",
+    "data_type": "decimal",
+    "format_hint": "numeric"
+  },
+  {
+    "original_name": "Any Promo Dollar Sales",
+    "canonical_name": "promo_dollar_sales",
+    "type": "POS measure",
+    "description": "Dollar sales during any promotion",
+    "data_type": "decimal",
+    "format_hint": "numeric"
+  },
+  {
+    "original_name": "Any Promo Dollar Sales year Ago",
+    "canonical_name": "promo_dollar_sales_ya",
+    "type": "POS measure",
+    "description": "Dollar sales during any promotion",
+    "data_type": "decimal",
+    "format_hint": "numeric"
+  },
+  {
+    "original_name": "Avg Volume Price",
+    "canonical_name": "avg_volume_price",
+    "type": "POS measure",
+    "description": "Average price per volume",
+    "data_type": "decimal",
+    "format_hint": "numeric"
+  },
+  {
+    "original_name": "Avg Volume Price Year Ago",
+    "canonical_name": "avg_volume_price_ya",
+    "type": "POS measure",
+    "description": "Average price per volume",
+    "data_type": "decimal",
+    "format_hint": "numeric"
+  },
+  {
+    "original_name": "Brand",
+    "canonical_name": "brand",
+    "type": "Product attribution",
+    "description": "Brand name",
+    "data_type": "string",
+    "format_hint": "string"
+  },
+  {
+    "original_name": "Category",
+    "canonical_name": "category",
+    "type": "Product attribution",
+    "description": "Category label",
+    "data_type": "string",
+    "format_hint": "string"
+  },
+  {
+    "original_name": "Dollar Sales",
+    "canonical_name": "dollar_sales",
+    "type": "POS measure",
+    "description": "Dollar sales (TY or YA)",
+    "data_type": "decimal",
+    "format_hint": "numeric"
+  },
+  {
+    "original_name": "Dollar Sales Year Ago",
+    "canonical_name": "dollar_sales_ya",
+    "type": "POS measure",
+    "description": "Dollar sales (TY or YA)",
+    "data_type": "decimal",
+    "format_hint": "numeric"
+  },
+  {
+    "original_name": "Geography",
+    "canonical_name": "market",
+    "type": "Location attribution",
+    "description": "Geographic market / division label",
+    "data_type": "string",
+    "format_hint": "string"
+  },
+  {
+    "original_name": "TDP",
+    "canonical_name": "tdp_ty",
+    "type": "Location measure",
+    "description": "Total distribution points",
+    "data_type": "decimal",
+    "format_hint": "numeric"
+  },
+  {
+    "original_name": "TDP YA",
+    "canonical_name": "tdp_ya",
+    "type": "Location measure",
+    "description": "Total distribution points",
+    "data_type": "decimal",
+    "format_hint": "numeric"
+  },
+  {
+    "original_name": "Time",
+    "canonical_name": "time_agg",
+    "type": "Time Agg",
+    "description": "Time aggregation label (e.g., Latest 52 Wks - w/e 08/02/25)",
+    "data_type": "string",
+    "format_hint": "string"
+  },
+  {
+    "original_name": "Unit Sales",
+    "canonical_name": "unit_sales",
+    "type": "POS measure",
+    "description": "Unit sales (TY or YA)",
+    "data_type": "decimal",
+    "format_hint": "numeric"
+  },
+  {
+    "original_name": "Unit Sales Year Ago",
+    "canonical_name": "unit_sales_ya",
+    "type": "POS measure",
+    "description": "Unit sales (TY or YA)",
+    "data_type": "decimal",
+    "format_hint": "numeric"
+  },
+  {
+    "original_name": "Velocity",
+    "canonical_name": "velocity",
+    "type": "POS measure",
+    "description": "Velocity (e.g., sales per distribution)",
+    "data_type": "decimal",
+    "format_hint": "numeric"
+  },
+  {
+    "original_name": "Velocity Year Ago",
+    "canonical_name": "velocity_ya",
+    "type": "POS measure",
+    "description": "Velocity (e.g., sales per distribution)",
+    "data_type": "decimal",
+    "format_hint": "numeric"
+  },
+  {
+    "original_name": "Volume Sales",
+    "canonical_name": "volume_sales",
+    "type": "POS measure",
+    "description": "Volume sales (TY or YA)",
+    "data_type": "decimal",
+    "format_hint": "numeric"
+  },
+  {
+    "original_name": "Volume Sales Year Ago",
+    "canonical_name": "volume_sales_ya",
+    "type": "POS measure",
+    "description": "Volume sales (TY or YA)",
+    "data_type": "decimal",
+    "format_hint": "numeric"
+  }
+]
