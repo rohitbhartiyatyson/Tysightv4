@@ -86,6 +86,23 @@ def create_kind(uploaded_file, kind_name, sample_file=None):
         except Exception as exc:
             return False, f"Error saving nice mapping: {exc}"
 
+        # Merge required_mapping.csv and nice_mapping.csv into mapping_effective.json
+        try:
+            req_df = pd.read_csv(out_path)
+            nice_df = pd.read_csv(nice_path)
+            # Merge required and nice mappings using an outer join to include sample-only columns
+            merged = pd.merge(req_df, nice_df, on='original_name', how='outer')
+            # Fill NA with empty strings for JSON-friendly output
+            merged = merged.fillna('')
+            # Convert to list of records
+            records = merged.to_dict(orient='records')
+            import json
+            effective_path = os.path.join(base_dir, 'mapping_effective.json')
+            with open(effective_path, 'w') as ef:
+                json.dump(records, ef, indent=2)
+        except Exception as exc:
+            return False, f"Error generating effective mapping: {exc}"
+
         # Generate a markdown table for autofill_report.md summarizing the inferences
         try:
             report_lines = ['# Autofill Report', '', '| column | format_hint |', '|---|---|']
