@@ -29,9 +29,6 @@ def get_sql_from_prompt(prompt: str) -> str:
         api_base=api_base,
     )
 
-    # Debug: print raw response for troubleshooting
-    print(f"RAW LLM RESPONSE: {resp}")
-
     # The response may be a ModelResponse object from litellm. Extract the assistant
     # message content if present and parse it as JSON to obtain the SQL.
     try:

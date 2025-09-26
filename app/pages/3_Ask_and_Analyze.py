@@ -20,7 +20,9 @@ selected_kind = st.selectbox('Select a Kind', options=[''] + kind_options)
 
 profile = {}
 if selected_kind:
-    profile_path = os.path.join(kinds_dir, selected_kind, 'v1', 'profile.json')
+    # Load profile.json from the datasets directory for the selected kind
+    datasets_dir = os.path.join('domain','catalog','datasets')
+    profile_path = os.path.join(datasets_dir, selected_kind, 'profile.json')
     if os.path.exists(profile_path):
         try:
             with open(profile_path,'r') as pf:
@@ -28,20 +30,14 @@ if selected_kind:
         except Exception:
             profile = {}
 
-# Debug: show raw profile data
-profile_data = profile
-if profile_data:
-    st.markdown('**Raw profile.json content:**')
-    st.json(profile_data)
-
-# For all filterable columns in profile_data, show their unique values and capture selections
-selected_filters_ui = {}
-if profile_data:
-    for col, values in profile_data.items():
-        key = f"filter_{col}"
-        val = st.selectbox(f"Filter by {col}", options=[''] + list(values), key=key)
-        if val:
-            selected_filters_ui[col] = val
+    # For all filterable columns in profile_data, show their unique values and capture selections
+    selected_filters_ui = {}
+    if profile:
+        for col, values in profile.items():
+            key = f"filter_{col}"
+            val = st.selectbox(f"Filter by {col}", options=[''] + list(values), key=key)
+            if val:
+                selected_filters_ui[col] = val
 
 # Question input
 question = st.text_area('Type your question')
