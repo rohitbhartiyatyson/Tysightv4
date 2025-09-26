@@ -1,0 +1,21 @@
+original_name,canonical_name,type,description,data_type
+Geography,market,Location attribution,Geographic market / division label,string
+Time,time_agg,Time Agg,"Time aggregation label (e.g., Latest 52 Wks - w/e 08/02/25)",string
+Category,category,Product attribution,Category label,string
+Brand,brand,Product attribution,Brand name,string
+Dollar Sales,dollar_sales,POS measure,Dollar sales (TY or YA),decimal
+Dollar Sales Year Ago,dollar_sales_ya,POS measure,Dollar sales (TY or YA),decimal
+Unit Sales,unit_sales,POS measure,Unit sales (TY or YA),decimal
+Unit Sales Year Ago,unit_sales_ya,POS measure,Unit sales (TY or YA),decimal
+Volume Sales,volume_sales,POS measure,Volume sales (TY or YA),decimal
+Volume Sales Year Ago,volume_sales_ya,POS measure,Volume sales (TY or YA),decimal
+%ACV,acv_pct,Location measure,All Commodity Volume distribution (%),decimal
+%ACV YA,acv_pct_ya,Location measure,All Commodity Volume distribution (%),decimal
+TDP,tdp_ty,Location measure,Total distribution points,decimal
+TDP YA,tdp_ya,Location measure,Total distribution points,decimal
+Velocity,velocity,POS measure,"Velocity (e.g., sales per distribution)",decimal
+Velocity Year Ago,velocity_ya,POS measure,"Velocity (e.g., sales per distribution)",decimal
+Any Promo Dollar Sales,promo_dollar_sales,POS measure,Dollar sales during any promotion,decimal
+Any Promo Dollar Sales year Ago,promo_dollar_sales_ya,POS measure,Dollar sales during any promotion,decimal
+Avg Volume Price,avg_volume_price,POS measure,Average price per volume,decimal
+Avg Volume Price Year Ago,avg_volume_price_ya,POS measure,Average price per volume,decimal
