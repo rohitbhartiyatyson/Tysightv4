@@ -1,3 +1,4 @@
+import os
 import json
 import litellm
 
@@ -7,8 +8,18 @@ def get_sql_from_prompt(prompt: str) -> str:
 
     The model is instructed to reply with strict JSON: {"sql": "..."}
     """
+    # Read API config from environment
+    api_key = os.environ.get('LITELLM_API_KEY')
+    api_base = os.environ.get('LITELLM_API_BASE')
+
     # Make a completion call. We set a short max_tokens to encourage concise output.
-    resp = litellm.completion(prompt=prompt, model="gpt-3.5-turbo", max_tokens=256)
+    resp = litellm.completion(
+        prompt=prompt,
+        model="gpt-3.5-turbo",
+        max_tokens=256,
+        api_key=api_key,
+        api_base=api_base,
+    )
 
     # Expecting resp to be a string containing JSON like: {"sql": "SELECT ..."}
     try:
