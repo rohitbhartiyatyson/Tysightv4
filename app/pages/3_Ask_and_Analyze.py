@@ -24,14 +24,14 @@ if selected_kind:
         except Exception:
             profile = {}
 
-# For the first filterable column in profile, show its unique values
-filter_value = ''
-first_col = None
+# For all filterable columns in profile, show their unique values and capture selections
+selected_filters_ui = {}
 if profile:
-    first_col = next(iter(profile.keys()), None)
-    if first_col:
-        # capture the selected value so it can be used in the prompt
-        filter_value = st.selectbox(f"Filter by {first_col}", options=[''] + list(profile.get(first_col, [])), key=f"filter_{first_col}")
+    for col, values in profile.items():
+        key = f"filter_{col}"
+        val = st.selectbox(f"Filter by {col}", options=[''] + list(values), key=key)
+        if val:
+            selected_filters_ui[col] = val
 
 # Question input
 question = st.text_area('Type your question')
@@ -39,11 +39,8 @@ question = st.text_area('Type your question')
 from insight_agent.prompt_builder import build_prompt
 
 if st.button('Ask'):
-    # collect selected filters: include the first profile column selection if present
-    selected_filters = {}
-    if profile and first_col:
-        if filter_value:
-            selected_filters[first_col] = filter_value
+    # collect selected filters from all filter widgets
+    selected_filters = selected_filters_ui if isinstance(selected_filters_ui, dict) else {}
 
     prompt = build_prompt(selected_kind, question, selected_filters)
     st.code(prompt)
