@@ -6,3 +6,7 @@ __pycache__/
 .env
 insight_agent.egg-info/
 *.log
+
+# Ignore user-generated Kind and Instance data
+domain/catalog/datasets/
+domain/catalog/kinds/
