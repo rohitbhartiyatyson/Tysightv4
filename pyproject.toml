@@ -26,3 +26,8 @@ where = ["."]
 
 [tool.setuptools]
 # Include package data if any
+
+[project.optional-dependencies]
+test = [
+  "pytest>=7.0"
+]
