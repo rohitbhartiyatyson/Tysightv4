@@ -58,8 +58,40 @@ def create_kind(uploaded_file, kind_name, sample_file=None):
             # If sample file can't be read, continue but warn in message
             return False, "Error reading sample data file."
 
-        report = "# Autofill Report\n\nThis is a placeholder autofill report."
+        # Infer format hints for each column in sample_df
+        hints = []
+        for col in sample_df.columns:
+            series = sample_df[col]
+            fmt = 'string'
+            # try numeric
+            try:
+                _ = pd.to_numeric(series.dropna())
+                fmt = 'numeric'
+            except Exception:
+                # try datetime
+                try:
+                    _ = pd.to_datetime(series.dropna())
+                    fmt = 'datetime'
+                except Exception:
+                    fmt = 'string'
+            hints.append((col, fmt))
+
+        # Save nice_mapping.csv with original_name and format_hint
         try:
+            nice_path = os.path.join(base_dir, 'nice_mapping.csv')
+            with open(nice_path, 'w') as nf:
+                nf.write('original_name,format_hint\n')
+                for col, fmt in hints:
+                    nf.write(f"{col},{fmt}\n")
+        except Exception as exc:
+            return False, f"Error saving nice mapping: {exc}"
+
+        # Generate a markdown table for autofill_report.md summarizing the inferences
+        try:
+            report_lines = ['# Autofill Report', '', '| column | format_hint |', '|---|---|']
+            for col, fmt in hints:
+                report_lines.append(f'| {col} | {fmt} |')
+            report = '\n'.join(report_lines)
             report_path = os.path.join(base_dir, 'autofill_report.md')
             with open(report_path, 'w') as fh:
                 fh.write(report)
