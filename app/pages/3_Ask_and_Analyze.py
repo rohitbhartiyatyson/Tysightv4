@@ -49,3 +49,8 @@ if st.button('Ask'):
 
     prompt = build_prompt(selected_kind, question, selected_filters)
     st.code(prompt)
+
+    # Now call the LLM client to get SQL
+    from insight_agent.llm_client import get_sql_from_prompt
+    sql = get_sql_from_prompt(prompt)
+    st.code(sql)

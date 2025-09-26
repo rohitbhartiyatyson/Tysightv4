@@ -15,7 +15,8 @@ requires-python = ">=3.8"
 
 # Runtime dependencies
 dependencies = [
-  "streamlit>=1.0"
+  "streamlit>=1.0",
+  "litellm>=0.0.1"
 ]
 
 [project.urls]
