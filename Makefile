@@ -1,5 +1,6 @@
 install:
-	@echo "install placeholder"
+	@echo "Installing package and test dependencies..."
+	pip install -e .[test]
 
 smoke-test:
 	@echo "Running smoke tests..."
