@@ -24,7 +24,7 @@ def get_sql_from_prompt(prompt: str) -> str:
     resp = litellm.completion(
         messages=[{"role": "user", "content": prompt}],
         model="gpt-5-mini",
-        max_tokens=256,
+        max_tokens=1024,
         api_key=api_key,
         api_base=api_base,
     )
@@ -32,16 +32,22 @@ def get_sql_from_prompt(prompt: str) -> str:
     # Debug: print raw response for troubleshooting
     print(f"RAW LLM RESPONSE: {resp}")
 
-    # Expecting resp to be a string containing JSON like: {"sql": "SELECT ..."}
+    # The response may be a ModelResponse object from litellm. Extract the assistant
+    # message content if present and parse it as JSON to obtain the SQL.
     try:
-        parsed = json.loads(resp)
+        content = resp.choices[0].message.content if hasattr(resp, 'choices') else resp
+    except Exception:
+        content = resp
+
+    try:
+        parsed = json.loads(content)
         return parsed.get('sql', '')
     except Exception:
-        # Try to extract JSON substring
+        # Try to extract JSON substring from the content
         try:
-            start = resp.index('{')
-            end = resp.rindex('}') + 1
-            parsed = json.loads(resp[start:end])
+            start = content.index('{')
+            end = content.rindex('}') + 1
+            parsed = json.loads(content[start:end])
             return parsed.get('sql', '')
         except Exception:
             return ''
