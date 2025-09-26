@@ -25,10 +25,13 @@ if selected_kind:
             profile = {}
 
 # For the first filterable column in profile, show its unique values
+filter_value = ''
+first_col = None
 if profile:
     first_col = next(iter(profile.keys()), None)
     if first_col:
-        st.selectbox(f"Filter by {first_col}", options=[''] + list(profile.get(first_col, [])))
+        # capture the selected value so it can be used in the prompt
+        filter_value = st.selectbox(f"Filter by {first_col}", options=[''] + list(profile.get(first_col, [])), key=f"filter_{first_col}")
 
 # Question input
 question = st.text_area('Type your question')
@@ -36,16 +39,11 @@ question = st.text_area('Type your question')
 from insight_agent.prompt_builder import build_prompt
 
 if st.button('Ask'):
-    # collect selected filters: for now, just include the first profile column selection if present
+    # collect selected filters: include the first profile column selection if present
     selected_filters = {}
-    if profile:
-        first_col = next(iter(profile.keys()), None)
-        if first_col:
-            sel = st.session_state.get(f"filter_{first_col}", '') if hasattr(st, 'session_state') else ''
-            # But we don't have the selected value stored; instead read from the widget directly isn't possible here.
-            # As a simpler approach, if the selectbox value was set, reconstruct from query params — but for now we will
-            # pretend no filters are selected and build prompt without filters.
-            selected_filters = {}
+    if profile and first_col:
+        if filter_value:
+            selected_filters[first_col] = filter_value
 
     prompt = build_prompt(selected_kind, question, selected_filters)
     st.code(prompt)
