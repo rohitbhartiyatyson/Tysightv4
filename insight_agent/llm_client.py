@@ -16,6 +16,10 @@ def get_sql_from_prompt(prompt: str) -> str:
     api_key = os.environ.get('LITELLM_API_KEY')
     api_base = os.environ.get('LITELLM_API_BASE')
 
+    # If API key is missing, return a helpful error string instead of calling external API
+    if not api_key:
+        return "Error: LITELLM_API_KEY is not set. Please create a .env file with your API key."
+
     # Make a completion call. We set a short max_tokens to encourage concise output.
     resp = litellm.completion(
         prompt=prompt,
