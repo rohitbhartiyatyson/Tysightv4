@@ -1,9 +1,10 @@
-def create_kind(uploaded_file, kind_name):
+def create_kind(uploaded_file, kind_name, sample_file=None):
     """Validate a mapping workbook uploaded via Streamlit and persist it.
 
     Args:
         uploaded_file: A file-like object as provided by st.file_uploader.
         kind_name (str): The name of the Kind to persist.
+        sample_file: Optional file-like object for sample data.
 
     Returns:
         tuple: (success: bool, message: str)
@@ -40,5 +41,31 @@ def create_kind(uploaded_file, kind_name):
         df.to_csv(out_path, index=False)
     except Exception as exc:
         return False, f"Error saving mapping file: {exc}"
+
+    # Handle sample data and generate a simple autofill report
+    if sample_file is not None:
+        try:
+            sname = getattr(sample_file, 'name', '')
+            if isinstance(sname, str) and sname.lower().endswith(('.xls', '.xlsx')):
+                sample_df = pd.read_excel(sample_file)
+            else:
+                try:
+                    sample_file.seek(0)
+                except Exception:
+                    pass
+                sample_df = pd.read_csv(sample_file)
+        except Exception:
+            # If sample file can't be read, continue but warn in message
+            return False, "Error reading sample data file."
+
+        report = "# Autofill Report\n\nThis is a placeholder autofill report."
+        try:
+            report_path = os.path.join(base_dir, 'autofill_report.md')
+            with open(report_path, 'w') as fh:
+                fh.write(report)
+        except Exception as exc:
+            return False, f"Error saving autofill report: {exc}"
+
+        return True, f"Success! Kind '{kind_name}' created and autofill report generated."
 
     return True, f"Success! Kind '{kind_name}' created and mapping file saved."
