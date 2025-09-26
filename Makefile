@@ -2,7 +2,8 @@ install:
 	@echo "install placeholder"
 
 smoke-test:
-	@echo "smoke-test placeholder"
+	@echo "Running smoke tests..."
+	pytest -q
 
 e2e-test:
 	@echo "e2e-test placeholder"
