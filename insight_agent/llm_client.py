@@ -29,6 +29,9 @@ def get_sql_from_prompt(prompt: str) -> str:
         api_base=api_base,
     )
 
+    # Debug: print raw response for troubleshooting
+    print(f"RAW LLM RESPONSE: {resp}")
+
     # Expecting resp to be a string containing JSON like: {"sql": "SELECT ..."}
     try:
         parsed = json.loads(resp)
