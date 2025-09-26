@@ -90,8 +90,10 @@ def create_kind(uploaded_file, kind_name, sample_file=None):
         try:
             req_df = pd.read_csv(out_path)
             nice_df = pd.read_csv(nice_path)
-            # Merge on original_name (nice_mapping's original_name should match req_df.original_name)
-            merged = req_df.merge(nice_df, left_on='original_name', right_on='original_name', how='left')
+            # Merge required and nice mappings using an outer join to include sample-only columns
+            merged = pd.merge(req_df, nice_df, on='original_name', how='outer')
+            # Fill NA with empty strings for JSON-friendly output
+            merged = merged.fillna('')
             # Convert to list of records
             records = merged.to_dict(orient='records')
             import json
