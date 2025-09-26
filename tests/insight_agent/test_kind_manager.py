@@ -22,7 +22,7 @@ def test_create_kind_success(tmp_path):
         with open(sample_path, 'w', newline='') as sf:
             sf.write('num_col,str_col,date_col\n1,2,2020-01-01\n3,hello,2020-02-02')
         with open(sample_path, 'rb') as sample_f:
-            success, message = create_kind(mapping_f, 'test_kind', sample_f)
+            success, message = create_kind(mapping_f, 'test_kind', sample_f, kind_description='A test description')
 
     assert success is True
 
@@ -53,6 +53,16 @@ def test_create_kind_success(tmp_path):
     assert any(r.get('original_name')=='num_col' and r.get('format_hint')=='numeric' for r in records)
     assert any(r.get('original_name')=='str_col' and r.get('format_hint')=='string' for r in records)
     assert any(r.get('original_name')=='date_col' and r.get('format_hint')=='datetime' for r in records)
+
+    # Check description.md was created and contains the kind description
+    desc_path = os.path.join('domain','catalog','kinds','test_kind','v1','description.md')
+    assert os.path.exists(desc_path)
+    with open(desc_path,'r') as dfh:
+        assert 'A test description' in dfh.read()
+
+    # Cleanup description
+    if os.path.exists(desc_path):
+        os.remove(desc_path)
 
     # Cleanup
     if os.path.exists(out_path):

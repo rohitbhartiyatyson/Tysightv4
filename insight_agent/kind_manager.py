@@ -1,4 +1,4 @@
-def create_kind(uploaded_file, kind_name, sample_file=None):
+def create_kind(uploaded_file, kind_name, sample_file=None, kind_description=''):
     """Validate a mapping workbook uploaded via Streamlit and persist it.
 
     Args:
@@ -39,6 +39,11 @@ def create_kind(uploaded_file, kind_name, sample_file=None):
         os.makedirs(base_dir, exist_ok=True)
         out_path = os.path.join(base_dir, 'required_mapping.csv')
         df.to_csv(out_path, index=False)
+        # Save description if provided
+        if kind_description is not None and kind_description != '':
+            desc_path = os.path.join(base_dir, 'description.md')
+            with open(desc_path, 'w') as dfh:
+                dfh.write(kind_description)
     except Exception as exc:
         return False, f"Error saving mapping file: {exc}"
 
