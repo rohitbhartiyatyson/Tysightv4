@@ -1,6 +1,10 @@
 import os
+from dotenv import load_dotenv
 import json
 import litellm
+
+# load .env into environment
+load_dotenv()
 
 
 def get_sql_from_prompt(prompt: str) -> str:

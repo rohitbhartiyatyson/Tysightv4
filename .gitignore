@@ -1,0 +1,8 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+insight_agent.egg-info/
+*.log
