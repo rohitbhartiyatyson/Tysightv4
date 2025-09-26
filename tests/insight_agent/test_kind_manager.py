@@ -20,7 +20,7 @@ def test_create_kind_success(tmp_path):
         # create an empty sample file
         sample_path = tmp_path / "sample.csv"
         with open(sample_path, 'w', newline='') as sf:
-            sf.write('col1,col2\n1,2')
+            sf.write('num_col,str_col,date_col\n1,2,2020-01-01\n3,hello,2020-02-02')
         with open(sample_path, 'rb') as sample_f:
             success, message = create_kind(mapping_f, 'test_kind', sample_f)
 
@@ -30,6 +30,18 @@ def test_create_kind_success(tmp_path):
     report_path = os.path.join('domain', 'catalog', 'kinds', 'test_kind', 'v1', 'autofill_report.md')
     assert os.path.exists(out_path)
     assert os.path.exists(report_path)
+    nice_path = os.path.join('domain','catalog','kinds','test_kind','v1','nice_mapping.csv')
+    assert os.path.exists(nice_path)
+    # Check nice_mapping contents
+    with open(nice_path,'r') as nf:
+        contents = nf.read()
+    assert 'num_col' in contents and 'numeric' in contents
+    assert 'str_col' in contents and 'string' in contents
+    assert 'date_col' in contents and 'datetime' in contents
+    # Check autofill report is not placeholder
+    with open(report_path,'r') as rf:
+        rpt = rf.read()
+    assert 'Autofill Report' in rpt and 'num_col' in rpt
 
     # Cleanup
     if os.path.exists(out_path):
