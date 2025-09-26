@@ -13,10 +13,12 @@ kind_name = st.text_input('Kind Name')
 if st.button('Create Kind'):
     if mapping is None:
         st.error('Please upload the Required Mapping Workbook before creating a Kind.')
+    elif sample is None:
+        st.error('Please upload the Sample Data file before creating a Kind.')
     elif not kind_name or kind_name.strip() == '':
         st.error('Please enter a valid Kind Name.')
     else:
-        success, message = create_kind(mapping, kind_name.strip())
+        success, message = create_kind(mapping, kind_name.strip(), sample)
         if success:
             st.success(message)
         else:
