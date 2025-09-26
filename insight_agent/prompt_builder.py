@@ -42,6 +42,12 @@ def build_prompt(kind_name, user_question, selected_filters=None):
         schema_lines.append(f"- {canon} (source column: {orig}): {desc}")
 
     parts = []
+    # Strict instruction to enforce JSON-only output
+    instruction = (
+        'You are a SQL generation bot. Your ONLY output must be a single JSON object with a key named "sql".'
+        ' Do not add any other text, explanation, or markdown formatting.'
+    )
+    parts.append(instruction)
     parts.append(f"Dataset: {kind_name}")
     if description:
         parts.append("\nDescription:\n" + description)
