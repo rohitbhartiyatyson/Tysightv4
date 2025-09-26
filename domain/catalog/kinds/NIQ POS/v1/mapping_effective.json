@@ -82,7 +82,7 @@
   {
     "original_name": "Geography",
     "canonical_name": "market",
-    "type": "Location attribution",
+    "type": "location_attribute",
     "description": "Geographic market / division label",
     "data_type": "string",
     "format_hint": "string"
