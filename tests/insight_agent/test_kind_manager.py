@@ -43,6 +43,17 @@ def test_create_kind_success(tmp_path):
         rpt = rf.read()
     assert 'Autofill Report' in rpt and 'num_col' in rpt
 
+    # Check effective mapping JSON
+    eff_path = os.path.join('domain','catalog','kinds','test_kind','v1','mapping_effective.json')
+    assert os.path.exists(eff_path)
+    import json
+    with open(eff_path,'r') as ef:
+        records = json.load(ef)
+    # Ensure each record has original_name and format_hint
+    assert any(r.get('original_name')=='num_col' and r.get('format_hint')=='numeric' for r in records)
+    assert any(r.get('original_name')=='str_col' and r.get('format_hint')=='string' for r in records)
+    assert any(r.get('original_name')=='date_col' and r.get('format_hint')=='datetime' for r in records)
+
     # Cleanup
     if os.path.exists(out_path):
         os.remove(out_path)
