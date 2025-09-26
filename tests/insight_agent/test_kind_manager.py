@@ -31,3 +31,21 @@ def test_create_kind_success(tmp_path):
             os.removedirs(os.path.dirname(out_path))
         except Exception:
             pass
+
+
+def test_create_kind_failure_missing_columns(tmp_path):
+    # Create a temporary CSV file missing the 'data_type' column
+    data = [
+        ["original_name", "canonical_name", "type", "description"],
+        ["a", "A", "string", "desc"],
+    ]
+    file_path = tmp_path / "mapping_invalid.csv"
+    with open(file_path, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerows(data)
+
+    # Call create_kind with the invalid file and kind name
+    with open(file_path, 'rb') as f:
+        success, message = create_kind(f, 'test_kind_invalid')
+
+    assert success is False
