@@ -20,9 +20,9 @@ def get_sql_from_prompt(prompt: str) -> str:
     if not api_key:
         return "Error: LITELLM_API_KEY is not set. Please create a .env file with your API key."
 
-    # Make a completion call. We set a short max_tokens to encourage concise output.
+    # Make a completion call. Use chat-style messages list expected by this LiteLLM instance.
     resp = litellm.completion(
-        prompt=prompt,
+        messages=[{"role": "user", "content": prompt}],
         model="gpt-5-mini",
         max_tokens=256,
         api_key=api_key,
