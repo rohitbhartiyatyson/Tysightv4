@@ -50,7 +50,29 @@ def onboard_instance(kind_name, instance_file):
             df.to_parquet(out_path, compression='zstd', index=False)
         except Exception as exc:
             return False, f"Error saving instance file: {exc}"
-        return True, f"Success! Instance for '{kind_name}' is valid and has been saved."
+
+        # Read back the parquet and generate a profile for filterable columns
+        try:
+            df_saved = pd.read_parquet(out_path)
+            # Identify filterable columns from mapping. We'll consider records with 'type' equal to
+            # certain values as filterable.
+            filterable_types = {"location_attribute", "market_or_store"}
+            filterable_cols = [rec.get('original_name') for rec in mapping if rec.get('type') in filterable_types]
+
+            profile = {}
+            for col in filterable_cols:
+                if col in df_saved.columns:
+                    uniques = df_saved[col].dropna().unique().tolist()
+                    # cap at 200
+                    profile[col] = uniques[:200]
+
+            profile_path = os.path.join(datasets_dir, 'profile.json')
+            with open(profile_path, 'w') as pf:
+                json.dump(profile, pf, indent=2)
+        except Exception as exc:
+            return False, f"Error profiling instance data: {exc}"
+
+        return True, f"Success! Instance for '{kind_name}' has been saved and profiled."
     else:
         missing = [c for c in expected if c not in actual]
         extra = [c for c in actual if c not in expected]
