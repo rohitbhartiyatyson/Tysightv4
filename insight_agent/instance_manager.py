@@ -41,7 +41,16 @@ def onboard_instance(kind_name, instance_file):
     actual = list(df.columns)
 
     if set(expected) == set(actual):
-        return True, "Instance is valid."
+        # Persist dataset to domain/catalog/datasets/<kind_name>/latest.parquet
+        datasets_dir = os.path.join('domain', 'catalog', 'datasets', kind_name)
+        os.makedirs(datasets_dir, exist_ok=True)
+        out_path = os.path.join(datasets_dir, 'latest.parquet')
+        try:
+            # Use parquet with zstd compression
+            df.to_parquet(out_path, compression='zstd', index=False)
+        except Exception as exc:
+            return False, f"Error saving instance file: {exc}"
+        return True, f"Success! Instance for '{kind_name}' is valid and has been saved."
     else:
         missing = [c for c in expected if c not in actual]
         extra = [c for c in actual if c not in expected]

@@ -27,6 +27,16 @@ def test_onboard_instance_success(tmp_path):
         success, message = onboard_instance('mock_kind', inst_f)
 
     assert success is True
+    # Check that latest.parquet was created
+    latest_path = os.path.join('domain','catalog','datasets','mock_kind','latest.parquet')
+    assert os.path.exists(latest_path)
+    # cleanup dataset
+    try:
+        os.remove(latest_path)
+        os.removedirs(os.path.dirname(latest_path))
+    except Exception:
+        pass
+
     # cleanup
     try:
         os.remove(os.path.join(kind_dir, 'mapping_effective.json'))
