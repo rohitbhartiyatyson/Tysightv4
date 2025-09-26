@@ -23,7 +23,7 @@ def get_sql_from_prompt(prompt: str) -> str:
     # Make a completion call. We set a short max_tokens to encourage concise output.
     resp = litellm.completion(
         prompt=prompt,
-        model="openai/gpt-5-mini",
+        model="gpt-5-mini",
         max_tokens=256,
         api_key=api_key,
         api_base=api_base,
