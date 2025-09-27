@@ -10,8 +10,8 @@ def test_onboard_instance_success(tmp_path):
     
     # Create a mapping with a filterable column and instance values
     mapping = [
-        {"original_name": "a", "type": "market_or_store", "is_filterable": "yes", "filter_display_order": 1, "format_hint": "numeric"},
-        {"original_name": "b", "type": "string", "is_filterable": "no", "format_hint": "string"},
+        {"original_name": "a", "type": "market_or_store", "filter_display_order": 1, "format_hint": "numeric"},
+        {"original_name": "b", "type": "string", "filter_display_order": "", "format_hint": "string"},
     ]
     import json
     with open(os.path.join(kind_dir, 'mapping_effective.json'), 'w') as f:
