@@ -33,7 +33,14 @@ if selected_kind:
     # For all filterable columns in profile_data, show their unique values and capture selections
     selected_filters_ui = {}
     if profile:
-        for col, values in profile.items():
+        # Sort filters by filter_display_order when present (None treated as large)
+        def order_key(item):
+            col, info = item
+            order = info.get('filter_display_order') if isinstance(info, dict) else None
+            return (order is None, order if order is not None else 999999)
+
+        for col, info in sorted(profile.items(), key=order_key):
+            values = info['values'] if isinstance(info, dict) else info
             key = f"filter_{col}"
             val = st.selectbox(f"Filter by {col}", options=[''] + list(values), key=key)
             if val:
