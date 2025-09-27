@@ -68,6 +68,16 @@ if st.button('Ask'):
     from insight_agent.query_executor import execute_query
     try:
         df_result = execute_query(selected_kind, sql)
+        # Get AI summary for the result
+        from insight_agent.llm_client import get_summary_from_df
+        try:
+            summary = get_summary_from_df(df_result, prompt)
+            if summary:
+                st.markdown('**Summary:**')
+                st.markdown(summary)
+        except Exception:
+            # If summarization fails, continue to show data
+            pass
         st.markdown('**Query Results:**')
         st.dataframe(df_result)
     except Exception as e:
