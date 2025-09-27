@@ -54,27 +54,29 @@ def onboard_instance(kind_name, instance_file):
         # Read back the parquet and generate a profile for filterable columns
         try:
             df_saved = pd.read_parquet(out_path)
-            # Identify filterable columns from mapping. We'll consider records where
-            # mapping record has is_filterable == 'yes' (case-insensitive).
-            filterable_recs = [rec for rec in mapping if str(rec.get('is_filterable','')).lower() == 'yes']
+            # Identify filterable columns from mapping. A column is filterable if
+            # filter_display_order contains a number. Ignore blanks.
+            filterable_recs = []
+            for rec in mapping:
+                order_val = rec.get('filter_display_order')
+                try:
+                    if order_val is not None and str(order_val).strip() != '':
+                        # attempt to parse integer; if it fails, skip
+                        order_int = int(order_val)
+                        filterable_recs.append((rec, order_int))
+                except Exception:
+                    continue
 
             profile = {}
-            for rec in filterable_recs:
+            for rec, order_int in filterable_recs:
                 col = rec.get('original_name')
                 if col in df_saved.columns:
                     uniques = df_saved[col].dropna().unique().tolist()
                     # cap at 200
                     values = uniques[:200]
-                    # try to parse display order as int if present
-                    order = None
-                    try:
-                        if 'filter_display_order' in rec and rec.get('filter_display_order') is not None:
-                            order = int(rec.get('filter_display_order'))
-                    except Exception:
-                        order = None
                     profile[col] = {
                         'values': values,
-                        'filter_display_order': order
+                        'filter_display_order': order_int
                     }
 
             profile_path = os.path.join(datasets_dir, 'profile.json')
