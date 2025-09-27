@@ -46,6 +46,16 @@ def onboard_instance(kind_name, instance_file):
         os.makedirs(datasets_dir, exist_ok=True)
         out_path = os.path.join(datasets_dir, 'latest.parquet')
         try:
+            # Rename columns from original_name -> canonical_name using mapping
+            rename = {}
+            for rec in mapping:
+                orig = rec.get('original_name')
+                canon = rec.get('canonical_name', orig)
+                if orig and canon and orig != canon:
+                    rename[orig] = canon
+            if rename:
+                df = df.rename(columns=rename)
+
             # Use parquet with zstd compression
             df.to_parquet(out_path, compression='zstd', index=False)
         except Exception as exc:
