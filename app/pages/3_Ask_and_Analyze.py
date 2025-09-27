@@ -64,6 +64,15 @@ if st.button('Ask'):
     # save SQL to session state for persistent display
     st.session_state.sql_query = sql
 
+    # Execute the SQL against the selected kind's parquet (if available)
+    from insight_agent.query_executor import execute_query
+    try:
+        df_result = execute_query(selected_kind, sql)
+        st.markdown('**Query Results:**')
+        st.dataframe(df_result)
+    except Exception as e:
+        st.error(f"Error executing query: {e}")
+
 # If a SQL query has been stored in session state, display it
 if st.session_state.sql_query:
     st.markdown('**Generated SQL:**')
