@@ -46,6 +46,16 @@ def onboard_instance(kind_name, instance_file):
         os.makedirs(datasets_dir, exist_ok=True)
         out_path = os.path.join(datasets_dir, 'latest.parquet')
         try:
+            # Rename columns from original_name -> canonical_name using mapping
+            rename = {}
+            for rec in mapping:
+                orig = rec.get('original_name')
+                canon = rec.get('canonical_name', orig)
+                if orig and canon and orig != canon:
+                    rename[orig] = canon
+            if rename:
+                df = df.rename(columns=rename)
+
             # Use parquet with zstd compression
             df.to_parquet(out_path, compression='zstd', index=False)
         except Exception as exc:
@@ -69,12 +79,14 @@ def onboard_instance(kind_name, instance_file):
 
             profile = {}
             for rec, order_int in filterable_recs:
-                col = rec.get('original_name')
-                if col in df_saved.columns:
-                    uniques = df_saved[col].dropna().unique().tolist()
+                orig = rec.get('original_name')
+                canon = rec.get('canonical_name', orig)
+                # profile should use the canonical column name (since saved parquet uses canonical names)
+                if canon in df_saved.columns:
+                    uniques = df_saved[canon].dropna().unique().tolist()
                     # cap at 200
                     values = uniques[:200]
-                    profile[col] = {
+                    profile[canon] = {
                         'values': values,
                         'filter_display_order': order_int
                     }

@@ -10,8 +10,8 @@ def test_onboard_instance_success(tmp_path):
     
     # Create a mapping with a filterable column and instance values
     mapping = [
-        {"original_name": "a", "type": "market_or_store", "filter_display_order": 1, "format_hint": "numeric"},
-        {"original_name": "b", "type": "string", "filter_display_order": "", "format_hint": "string"},
+        {"original_name": "a", "canonical_name": "store_id", "type": "market_or_store", "filter_display_order": 1, "format_hint": "numeric"},
+        {"original_name": "b", "canonical_name": "label", "type": "string", "filter_display_order": "", "format_hint": "string"},
     ]
     import json
     with open(os.path.join(kind_dir, 'mapping_effective.json'), 'w') as f:
@@ -33,16 +33,23 @@ def test_onboard_instance_success(tmp_path):
     # Check that latest.parquet was created
     latest_path = os.path.join('domain','catalog','datasets','mock_kind','latest.parquet')
     assert os.path.exists(latest_path)
-    # Check profile.json exists and contains unique values for 'a'
+
+    # Read parquet and verify columns have been renamed to canonical names
+    import pandas as pd
+    df_saved = pd.read_parquet(latest_path)
+    assert 'store_id' in df_saved.columns
+    assert 'label' in df_saved.columns
+
+    # Check profile.json exists and contains unique values for 'store_id' (original 'a')
     profile_path = os.path.join('domain','catalog','datasets','mock_kind','profile.json')
     assert os.path.exists(profile_path)
     with open(profile_path,'r') as pf:
         prof = json.load(pf)
-    assert 'a' in prof
+    assert 'store_id' in prof
     # Verify profile now contains values and filter_display_order
-    assert isinstance(prof['a'], dict)
-    assert set(prof['a']['values']) == {'store1','store2'}
-    assert prof['a']['filter_display_order'] == 1
+    assert isinstance(prof['store_id'], dict)
+    assert set(prof['store_id']['values']) == {'store1','store2'}
+    assert prof['store_id']['filter_display_order'] == 1
 
     # cleanup dataset and profile
     try:
