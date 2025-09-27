@@ -48,6 +48,9 @@ def build_prompt(kind_name, user_question, selected_filters=None):
         ' Do not add any other text, explanation, or markdown formatting.'
     )
     parts.append(instruction)
+
+    # Helpful hint: tell the model the table name that will be used for execution
+    parts.append("Your query will be executed against a table named 'data'. Please write queries starting with SELECT and referencing 'data' in the FROM clause.")
     parts.append(f"Dataset: {kind_name}")
     if description:
         parts.append("\nDescription:\n" + description)

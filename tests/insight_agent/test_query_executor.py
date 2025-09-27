@@ -20,8 +20,8 @@ def test_execute_query(tmp_path):
     import shutil
     shutil.copy(p, dest)
 
-    # Run execute_query
-    res = execute_query(kind, 'SELECT * FROM dataset')
+    # Run execute_query with a backticked table name to simulate AI output
+    res = execute_query(kind, 'SELECT * FROM `my_table`')
     assert isinstance(res, pd.DataFrame)
     assert list(res.columns) == ['a','b']
     assert res.shape[0] == 3
