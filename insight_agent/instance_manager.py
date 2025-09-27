@@ -54,17 +54,28 @@ def onboard_instance(kind_name, instance_file):
         # Read back the parquet and generate a profile for filterable columns
         try:
             df_saved = pd.read_parquet(out_path)
-            # Identify filterable columns from mapping. We'll consider records with 'type' equal to
-            # certain values as filterable.
-            filterable_types = {"location_attribute", "market_or_store"}
-            filterable_cols = [rec.get('original_name') for rec in mapping if rec.get('type') in filterable_types]
+            # Identify filterable columns from mapping. We'll consider records where
+            # mapping record has is_filterable == 'yes' (case-insensitive).
+            filterable_recs = [rec for rec in mapping if str(rec.get('is_filterable','')).lower() == 'yes']
 
             profile = {}
-            for col in filterable_cols:
+            for rec in filterable_recs:
+                col = rec.get('original_name')
                 if col in df_saved.columns:
                     uniques = df_saved[col].dropna().unique().tolist()
                     # cap at 200
-                    profile[col] = uniques[:200]
+                    values = uniques[:200]
+                    # try to parse display order as int if present
+                    order = None
+                    try:
+                        if 'filter_display_order' in rec and rec.get('filter_display_order') is not None:
+                            order = int(rec.get('filter_display_order'))
+                    except Exception:
+                        order = None
+                    profile[col] = {
+                        'values': values,
+                        'filter_display_order': order
+                    }
 
             profile_path = os.path.join(datasets_dir, 'profile.json')
             with open(profile_path, 'w') as pf:
