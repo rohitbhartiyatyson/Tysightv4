@@ -67,11 +67,13 @@ def get_summary_from_df(df, user_question: str) -> str:
     prompt would exceed ~90% of the context window, it returns an informative message.
     Any API errors are caught and a graceful message returned.
     """
+    print("[llm_client] get_summary_from_df: start")
     api_key = os.environ.get('LITELLM_API_KEY')
     api_base = os.environ.get('LITELLM_API_BASE')
     model_name = "gpt-5-mini"
 
     if not api_key:
+        print("[llm_client] No API key set")
         return "Error: LITELLM_API_KEY is not set."
 
     # Convert entire dataframe to string for the summary context
@@ -88,19 +90,24 @@ def get_summary_from_df(df, user_question: str) -> str:
             info = model_info(model_name)
             # Common keys: 'context_window', 'context_size', 'max_tokens'
             context_limit = info.get('context_window') or info.get('context_size') or info.get('max_tokens')
-    except Exception:
+            print(f"[llm_client] model_info: {info}")
+    except Exception as exc:
         context_limit = None
+        print(f"[llm_client] model_info failed: {exc}")
 
     # Estimate tokens in prompt (simple heuristic: 4 chars ~ 1 token)
     prompt_text = f"Question: {user_question}\n\nData:\n{df_text}"
     estimated_tokens = max(1, len(prompt_text) // 4)
+    print(f"[llm_client] estimated_tokens={estimated_tokens}, context_limit={context_limit}")
 
     if context_limit is not None:
         try:
             if estimated_tokens > 0.9 * int(context_limit):
+                print("[llm_client] too large for summary")
                 return "The result is too large for an AI summary."
-        except Exception:
+        except Exception as exc:
             # if parsing fails, continue and attempt to summarize
+            print(f"[llm_client] parsing context limit failed: {exc}")
             pass
 
     # Build the user-facing prompt
@@ -113,6 +120,7 @@ def get_summary_from_df(df, user_question: str) -> str:
     )
 
     try:
+        print("[llm_client] calling litellm.completion")
         try:
             resp = litellm.completion(
                 messages=[{"role": "user", "content": prompt}],
@@ -121,19 +129,28 @@ def get_summary_from_df(df, user_question: str) -> str:
                 api_key=api_key,
                 api_base=api_base,
             )
+            print("[llm_client] litellm.completion returned")
         except TypeError:
             try:
                 resp = litellm.completion(prompt, max_tokens=150)
+                print("[llm_client] litellm.completion (legacy) returned")
             except TypeError:
                 resp = litellm.completion(prompt)
+                print("[llm_client] litellm.completion (fallback) returned")
 
         try:
             content = resp.choices[0].message.content if hasattr(resp, 'choices') else resp
-        except Exception:
+            print(f"[llm_client] content extracted: {str(content)[:200]}")
+        except Exception as exc:
             content = resp
+            print(f"[llm_client] content extraction failed: {exc}")
 
         if isinstance(content, dict):
-            return content.get('text', '') or content.get('content', '') or str(content)
+            text = content.get('text', '') or content.get('content', '') or str(content)
+            print(f"[llm_client] returning dict content: {text}")
+            return text
+        print(f"[llm_client] returning str content: {str(content)[:200]}")
         return str(content)
-    except Exception:
+    except Exception as exc:
+        print(f"[llm_client] completion failed: {exc}")
         return "AI summary is currently unavailable."
