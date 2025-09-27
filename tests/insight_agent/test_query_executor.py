@@ -16,7 +16,9 @@ def test_execute_query(tmp_path):
     datasets_dir = os.path.join('domain','catalog','datasets')
     os.makedirs(os.path.join(datasets_dir, kind), exist_ok=True)
     dest = os.path.join(datasets_dir, kind, 'latest.parquet')
-    p.rename(dest)
+    # Use copy to avoid cross-device rename errors in CI/tmp dirs
+    import shutil
+    shutil.copy(p, dest)
 
     # Run execute_query
     res = execute_query(kind, 'SELECT * FROM dataset')
