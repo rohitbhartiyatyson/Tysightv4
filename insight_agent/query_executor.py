@@ -35,8 +35,10 @@ def execute_query(kind_name: str, sql_query: str) -> pd.DataFrame:
             # replace with FROM data
             return f"{from_kw}data"
 
-        # Use a regex to find FROM <identifier> (handles backticks and quotes)
-        sql_fixed = re.sub(r"(FROM\s+)([`\"']?)[\w\s]+\2", replace_from, sql_query, flags=re.IGNORECASE)
+        # Use a regex to find FROM <identifier> (handles backticks, quotes, brackets, schema.table).
+        # Match patterns like: FROM `my table`, FROM "my table", FROM 'my table', FROM [my table], FROM schema.table, FROM table
+        pattern = r"(FROM\s+)(`[^`]+`|\"[^\"]+\"|'[^']+'|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)"
+        sql_fixed = re.sub(pattern, replace_from, sql_query, flags=re.IGNORECASE)
 
         df = con.execute(sql_fixed).df()
         return df
