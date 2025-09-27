@@ -21,13 +21,10 @@ def execute_query(kind_name: str, sql_query: str) -> pd.DataFrame:
     # Use duckdb to run SQL directly on the parquet file
     con = duckdb.connect(database=':memory:')
     try:
-        # Register the parquet as a view table name 't'
-        # DuckDB supports querying parquet directly via read_parquet or using the filename
-        query = sql_query
-        # If the query references a table name like 'parquet', we allow the user to use the file path
-        # but here we'll provide a table called 'dataset' pointing to the parquet file
-        con.register('dataset', parquet_path)
-        df = con.execute(query).df()
+        # Create a view named 'dataset' that reads from the parquet file
+        # using DuckDB's read_parquet function
+        con.execute(f"CREATE VIEW dataset AS SELECT * FROM read_parquet('{parquet_path.replace('\\', '/') }')")
+        df = con.execute(sql_query).df()
         return df
     finally:
         con.close()
