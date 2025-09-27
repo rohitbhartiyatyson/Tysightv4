@@ -57,3 +57,52 @@ def get_sql_from_prompt(prompt: str) -> str:
             return parsed.get('sql', '')
         except Exception:
             return ''
+
+
+# New: get a brief one-sentence summary from a dataframe using the LLM
+def get_summary_from_df(df, user_question: str) -> str:
+    """Build a prompt from the dataframe and user's question and return a one-sentence summary from litellm."""
+    api_key = os.environ.get('LITELLM_API_KEY')
+    api_base = os.environ.get('LITELLM_API_BASE')
+
+    if not api_key:
+        return "Error: LITELLM_API_KEY is not set."
+
+    sample = ''
+    try:
+        sample = df.head().to_string()
+    except Exception:
+        sample = str(df)[:1000]
+
+    prompt = (
+        "You are a helpful assistant.\n"
+        f"User question: {user_question}\n\n"
+        "Here is a sample of the query result (first few rows):\n"
+        f"{sample}\n\n"
+        "Provide a concise, one-sentence summary that answers the user's question based on the data."
+    )
+
+    try:
+        resp = litellm.completion(
+            messages=[{"role": "user", "content": prompt}],
+            model="gpt-5-mini",
+            max_tokens=150,
+            api_key=api_key,
+            api_base=api_base,
+        )
+    except TypeError:
+        try:
+            resp = litellm.completion(prompt, max_tokens=150)
+        except TypeError:
+            resp = litellm.completion(prompt)
+
+    try:
+        content = resp.choices[0].message.content if hasattr(resp, 'choices') else resp
+    except Exception:
+        content = resp
+
+    # If content is an object, try to extract string
+    if isinstance(content, dict):
+        return content.get('text', '') or content.get('content', '') or str(content)
+
+    return str(content)
