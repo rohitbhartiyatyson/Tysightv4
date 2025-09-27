@@ -79,12 +79,14 @@ def onboard_instance(kind_name, instance_file):
 
             profile = {}
             for rec, order_int in filterable_recs:
-                col = rec.get('original_name')
-                if col in df_saved.columns:
-                    uniques = df_saved[col].dropna().unique().tolist()
+                orig = rec.get('original_name')
+                canon = rec.get('canonical_name', orig)
+                # profile should use the canonical column name (since saved parquet uses canonical names)
+                if canon in df_saved.columns:
+                    uniques = df_saved[canon].dropna().unique().tolist()
                     # cap at 200
                     values = uniques[:200]
-                    profile[col] = {
+                    profile[canon] = {
                         'values': values,
                         'filter_display_order': order_int
                     }
