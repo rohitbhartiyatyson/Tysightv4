@@ -110,14 +110,12 @@ def get_summary_from_df(df, user_question: str) -> str:
             print(f"[llm_client] parsing context limit failed: {exc}")
             pass
 
-    # Build the user-facing prompt
-    prompt = (
-        "You are a helpful assistant.\n"
-        f"User question: {user_question}\n\n"
-        "Here is the query result (entire result as text):\n"
-        f"{df_text}\n\n"
-        "Provide a concise, one-sentence summary that answers the user's question based on the data."
-    )
+    # Build a concise, direct prompt using the full dataframe string
+    try:
+        df_full = df.to_string()
+    except Exception:
+        df_full = df_text
+    prompt = f'The user asked: "{user_question}". Based on this data, write a one-sentence summary of the answer. Data: {df_full}'
 
     try:
         print("[llm_client] calling litellm.completion")
