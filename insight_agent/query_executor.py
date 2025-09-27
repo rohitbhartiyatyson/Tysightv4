@@ -21,10 +21,24 @@ def execute_query(kind_name: str, sql_query: str) -> pd.DataFrame:
     # Use duckdb to run SQL directly on the parquet file
     con = duckdb.connect(database=':memory:')
     try:
-        # Create a view named 'dataset' that reads from the parquet file
-        # using DuckDB's read_parquet function
-        con.execute(f"CREATE VIEW dataset AS SELECT * FROM read_parquet('{parquet_path.replace('\\', '/') }')")
-        df = con.execute(sql_query).df()
+        # Normalize path for SQL
+        parquet_sql_path = parquet_path.replace('\\','/')
+        # Create a view named 'data' that reads from the parquet file
+        con.execute(f"CREATE VIEW data AS SELECT * FROM read_parquet('{parquet_sql_path}')")
+
+        # Replace table references in the incoming SQL to point to 'data'
+        import re
+        def replace_from(match):
+            # match.group(1) is the FROM keyword + whitespace
+            # match.group(2) is the table identifier (may be quoted/backticked)
+            from_kw = match.group(1)
+            # replace with FROM data
+            return f"{from_kw}data"
+
+        # Use a regex to find FROM <identifier> (handles backticks and quotes)
+        sql_fixed = re.sub(r"(FROM\s+)([`\"']?)[\w\s]+\2", replace_from, sql_query, flags=re.IGNORECASE)
+
+        df = con.execute(sql_fixed).df()
         return df
     finally:
         con.close()
