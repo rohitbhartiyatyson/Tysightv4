@@ -83,6 +83,10 @@ def get_summary_from_df(df, user_question: str) -> str:
 
         prompt = f'The user asked: "{user_question}". Based on this data, write a one-sentence summary of the answer. Data: {df_head}'
         print(f"[llm_client] prompt length={len(prompt)}")
+        # Diagnostic: print the full prompt being sent
+        print(f"[llm_client] prompt=
+{prompt}
+")
 
         try:
             resp = litellm.completion(
@@ -112,4 +116,6 @@ def get_summary_from_df(df, user_question: str) -> str:
         return str(content)
     except Exception as e:
         print(f"[llm_client] get_summary_from_df error: {e}")
+        # Detailed representation for debugging
+        print(f"Detailed summary exception: {repr(e)}")
         return "Error: The AI summary could not be generated. Please try again later."
