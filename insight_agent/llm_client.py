@@ -81,9 +81,11 @@ def get_summary_from_df(df, user_question: str) -> str:
         except Exception:
             df_head = str(df)
 
+        # Sanitize the incoming user_question: take only the last line provided
+        cleaned_question = user_question.splitlines()[-1].strip() if isinstance(user_question, str) else str(user_question)
         # Simplified prompt to avoid carrying over NL->SQL instructions
         df_head_str = df_head
-        prompt = f"""Given the user's question, '{user_question}', write a single, concise English sentence that summarizes the main finding in the data below.
+        prompt = f"""Given the user's question, '{cleaned_question}', write a single, concise English sentence that summarizes the main finding in the data below.
 
 
 Data:
