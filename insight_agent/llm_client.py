@@ -90,13 +90,13 @@ def get_summary_from_df(df, user_question: str) -> str:
             resp = litellm.completion(
                 messages=[{"role": "user", "content": prompt}],
                 model=model_name,
-                max_tokens=150,
+                max_tokens=4096,
                 api_key=api_key,
                 api_base=api_base,
             )
         except TypeError:
             try:
-                resp = litellm.completion(prompt, max_tokens=150)
+                resp = litellm.completion(prompt, max_tokens=4096)
             except TypeError:
                 resp = litellm.completion(prompt)
 
