@@ -60,35 +60,48 @@ if st.button('Ask'):
     print(f"[ui] user_question={question}")
     print(f"[ui] selected_filters={selected_filters}")
 
-    prompt = build_prompt(selected_kind, question, selected_filters)
-    st.code(prompt)
+    # Use new backend processor that returns evidence pieces
+    from insight_agent.llm_client import process_question
+    evidence = process_question(selected_kind, question, selected_filters)
 
-    # Now call the LLM client to get SQL
-    from insight_agent.llm_client import get_sql_from_prompt
-    sql = get_sql_from_prompt(prompt)
-    # save SQL to session state for persistent display
-    st.session_state.sql_query = sql
+    # Show SQL prompt and result summary
+    st.markdown('**Generated SQL Prompt:**')
+    st.code(evidence.get('sql_prompt',''))
+    st.session_state.sql_query = ''
 
-    # Execute the SQL against the selected kind's parquet (if available)
-    from insight_agent.query_executor import execute_query
-    try:
-        df_result = execute_query(selected_kind, sql)
-        print(f"[ui] df_result shape={df_result.shape}")
-        # Get AI summary for the result
-        from insight_agent.llm_client import get_summary_from_df
-        try:
-            summary = get_summary_from_df(df_result, prompt)
-            print(f"[ui] summary={summary}")
-            if summary:
-                st.markdown('**Summary:**')
-                st.markdown(summary)
-        except Exception:
-            # If summarization fails, continue to show data
-            pass
-        st.markdown('**Query Results:**')
-        st.dataframe(df_result)
-    except Exception as e:
-        st.error(f"Error executing query: {e}")
+    # Display summary
+    if evidence.get('summary_raw'):
+        st.markdown('**Summary:**')
+        st.markdown(evidence.get('summary_raw'))
+
+    st.markdown('**Query Results:**')
+    st.dataframe(evidence.get('dataframe', None))
+
+    # Add Evidence expander (5 parts)
+    with st.expander('Show Evidence'):
+        # 1) Full prompt sent to SQL LLM
+        with st.expander('1. SQL Prompt'):
+            st.code(evidence.get('sql_prompt',''))
+
+        # 2) Raw JSON response from SQL LLM
+        with st.expander('2. SQL Raw Response'):
+            st.code(evidence.get('sql_raw_response',''))
+
+        # 3) Complete DataFrame result
+        with st.expander('3. DataFrame Result'):
+            df_full = evidence.get('dataframe')
+            if df_full is not None:
+                st.dataframe(df_full)
+            else:
+                st.write('No data')
+
+        # 4) Full prompt sent to Summary LLM
+        with st.expander('4. Summary Prompt'):
+            st.code(evidence.get('summary_prompt',''))
+
+        # 5) Raw text response from Summary LLM
+        with st.expander('5. Summary Raw Response'):
+            st.code(evidence.get('summary_raw',''))
 
 # If a SQL query has been stored in session state, display it
 if st.session_state.sql_query:
