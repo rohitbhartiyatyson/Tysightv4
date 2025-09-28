@@ -7,7 +7,7 @@ def test_create_kind_success(tmp_path):
     # Create a temporary CSV file with required columns
     data = [
         ["original_name", "canonical_name", "type", "description", "data_type"],
-        ["a", "A", "string", "desc", "text"],
+        ["a", "A", "product_attribute", "desc", "string"],
     ]
     file_path = tmp_path / "mapping.csv"
     with open(file_path, 'w', newline='') as f:
