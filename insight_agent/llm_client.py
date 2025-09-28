@@ -81,7 +81,14 @@ def get_summary_from_df(df, user_question: str) -> str:
         except Exception:
             df_head = str(df)
 
-        prompt = f'The user asked: "{user_question}". Based on this data, write a one-sentence summary of the answer. Data: {df_head}'
+        # Simplified prompt to avoid carrying over NL->SQL instructions
+        df_head_str = df_head
+        prompt = f"""Given the user's question, '{user_question}', write a single, concise English sentence that summarizes the main finding in the data below.
+
+
+Data:
+{df_head_str}
+"""
         print(f"[llm_client] prompt length={len(prompt)}")
         # Diagnostic: print the full prompt being sent
         print(f"[llm_client] prompt=\n{prompt}\n")
