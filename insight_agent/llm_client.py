@@ -70,7 +70,7 @@ def get_summary_from_df(df, user_question: str) -> str:
         print("[llm_client] get_summary_from_df: start")
         api_key = os.environ.get('LITELLM_API_KEY')
         api_base = os.environ.get('LITELLM_API_BASE')
-        model_name = "claude-3-haiku-20240307"
+        model_name = "gpt-5-mini"
 
         if not api_key:
             print("[llm_client] No API key set")
