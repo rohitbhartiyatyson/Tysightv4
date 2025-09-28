@@ -41,12 +41,18 @@ def create_kind(uploaded_file, kind_name, sample_file=None, kind_description='')
     # 1) Invalid type values
     invalid_types = sorted(set(df['type'].dropna().astype(str).unique()) - allowed_types)
     if invalid_types:
-        return False, f"Validation failed: Invalid type values found: {invalid_types}"
+        return False, (
+            f"Validation failed: Invalid type values found: {invalid_types}. "
+            f"Valid options are: {sorted(list(allowed_types))}"
+        )
 
     # 2) Invalid data_type values
     invalid_data_types = sorted(set(df['data_type'].dropna().astype(str).unique()) - allowed_data_types)
     if invalid_data_types:
-        return False, f"Validation failed: Invalid data_type values found: {invalid_data_types}"
+        return False, (
+            f"Validation failed: Invalid data_type values found: {invalid_data_types}. "
+            f"Valid options are: {sorted(list(allowed_data_types))}"
+        )
 
     # 3) Duplicate canonical_name values
     dupes = df['canonical_name'][df['canonical_name'].duplicated(keep=False)]
