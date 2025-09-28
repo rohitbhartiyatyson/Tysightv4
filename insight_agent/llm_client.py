@@ -100,6 +100,12 @@ def get_summary_from_df(df, user_question: str) -> str:
             except TypeError:
                 resp = litellm.completion(prompt)
 
+        # Diagnostic: log full raw response object for debugging
+        try:
+            print(f"[llm_client] Full Litellm Response Object: {resp}")
+        except Exception as _:
+            print("[llm_client] Failed to print full response object")
+
         # Extract content
         try:
             content = resp.choices[0].message.content if hasattr(resp, 'choices') else resp
