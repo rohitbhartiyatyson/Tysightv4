@@ -1,0 +1,11 @@
+{
+  "branch": "feat/no-filters-warning",
+  "repo_head": "a87503e1960800d3d301b3b328ea0b21c11bbdfe",
+  "pr_url": null,
+  "ci": {
+    "smoke": "success",
+    "e2e": "unknown"
+  },
+  "updated_at": "2025-09-28T00:00:00Z",
+  "default_base": "main"
+}
