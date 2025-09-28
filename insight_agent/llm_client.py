@@ -23,6 +23,8 @@ def get_sql_from_prompt(prompt: str) -> str:
     # Make a completion call. Use chat-style messages list expected by this LiteLLM instance.
     try:
         # Preferred call signature: litellm.completion(messages=[...], model=..., ...)
+        # Diagnostic: print parameters being sent to litellm.completion
+        print(f"[llm_client][NL2SQL] calling litellm.completion with model=gpt-5-mini, api_base={api_base}, api_key_set={bool(api_key)}")
         resp = litellm.completion(
             messages=[{"role": "user", "content": prompt}],
             model="gpt-5-mini",
