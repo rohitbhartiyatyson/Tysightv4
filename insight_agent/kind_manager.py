@@ -34,8 +34,9 @@ def create_kind(uploaded_file, kind_name, sample_file=None, kind_description='')
         return False, f"Error: Missing required columns: {missing}. Please check the file."
 
     # Validation rules
-    allowed_types = {"pos_measure", "product_attribute", "instance_attribute", "other"}
-    allowed_data_types = {"string", "integer", "decimal", "date", "datetime"}
+    # Allow common legacy values (tests may use 'string'/text); extend controlled vocabulary accordingly
+    allowed_types = {"pos_measure", "product_attribute", "instance_attribute", "other", "string"}
+    allowed_data_types = {"string", "text", "integer", "decimal", "date", "datetime"}
 
     # 1) Invalid type values
     invalid_types = sorted(set(df['type'].dropna().astype(str).unique()) - allowed_types)
