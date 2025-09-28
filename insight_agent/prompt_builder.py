@@ -51,6 +51,7 @@ def build_prompt(kind_name, user_question, selected_filters=None):
 
     # Helpful hint: tell the model the table name that will be used for execution
     parts.append("Your query will be executed against a table named 'data'. Please write queries starting with SELECT and referencing 'data' in the FROM clause.")
+    parts.append("Important: For all string comparisons in the WHERE clause, you must use the LOWER() function on both the column and the value to ensure case-insensitivity. For example, instead of category = 'Bacon', you must write LOWER(category) = 'bacon'.")
     parts.append(f"Dataset: {kind_name}")
     if description:
         parts.append("\nDescription:\n" + description)
