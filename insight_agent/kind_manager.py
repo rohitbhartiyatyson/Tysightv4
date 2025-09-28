@@ -36,9 +36,9 @@ def create_kind(uploaded_file, kind_name, sample_file=None, kind_description='')
     # Validation rules
     # Allow common legacy values (tests may use 'string'/text); extend controlled vocabulary accordingly
     # Official V1 controlled vocabulary for "type" (as used in domain mapping files)
-    allowed_types = {"POS measure", "Product attribution", "Location attribution", "Location measure", "Time Agg", "string"}
+    allowed_types = {"product_attribute","location_attribute","mod_attribute","market_or_store","time_abs","time_agg","pos_measure","mod_measure","location_measure","media_measure"}
     # Official V1 controlled vocabulary for "data_type"
-    allowed_data_types = {"decimal", "string", "text", "integer", "date", "datetime"}
+    allowed_data_types = {"string","integer","decimal","date","datetime"}
 
     # 1) Invalid type values
     invalid_types = sorted(set(df['type'].dropna().astype(str).unique()) - allowed_types)
