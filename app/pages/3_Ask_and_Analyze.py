@@ -55,6 +55,11 @@ if st.button('Ask'):
     # collect selected filters from all filter widgets
     selected_filters = selected_filters_ui if isinstance(selected_filters_ui, dict) else {}
 
+    # Debug logging: selected kind, user question, and filters
+    print(f"[ui] selected_kind={selected_kind}")
+    print(f"[ui] user_question={question}")
+    print(f"[ui] selected_filters={selected_filters}")
+
     prompt = build_prompt(selected_kind, question, selected_filters)
     st.code(prompt)
 
@@ -68,6 +73,18 @@ if st.button('Ask'):
     from insight_agent.query_executor import execute_query
     try:
         df_result = execute_query(selected_kind, sql)
+        print(f"[ui] df_result shape={df_result.shape}")
+        # Get AI summary for the result
+        from insight_agent.llm_client import get_summary_from_df
+        try:
+            summary = get_summary_from_df(df_result, prompt)
+            print(f"[ui] summary={summary}")
+            if summary:
+                st.markdown('**Summary:**')
+                st.markdown(summary)
+        except Exception:
+            # If summarization fails, continue to show data
+            pass
         st.markdown('**Query Results:**')
         st.dataframe(df_result)
     except Exception as e:

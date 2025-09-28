@@ -23,6 +23,7 @@ def get_sql_from_prompt(prompt: str) -> str:
     # Make a completion call. Use chat-style messages list expected by this LiteLLM instance.
     try:
         # Preferred call signature: litellm.completion(messages=[...], model=..., ...)
+        # Diagnostic: print parameters being sent to litellm.completion
         resp = litellm.completion(
             messages=[{"role": "user", "content": prompt}],
             model="gpt-5-mini",
@@ -57,3 +58,59 @@ def get_sql_from_prompt(prompt: str) -> str:
             return parsed.get('sql', '')
         except Exception:
             return ''
+
+
+def get_summary_from_df(df, user_question: str) -> str:
+    """Simplified summary helper: build a small prompt from the dataframe head and call the model.
+
+    Any errors are caught and a user-friendly message returned.
+    """
+    try:
+        api_key = os.environ.get('LITELLM_API_KEY')
+        api_base = os.environ.get('LITELLM_API_BASE')
+        model_name = "gpt-5-mini"
+
+        if not api_key:
+            return "Error: LITELLM_API_KEY is not set."
+
+        try:
+            df_head = df.head().to_string()
+        except Exception:
+            df_head = str(df)
+
+        # Sanitize the incoming user_question: take only the last line provided
+        cleaned_question = user_question.splitlines()[-1].strip() if isinstance(user_question, str) else str(user_question)
+        # Simplified prompt to avoid carrying over NL->SQL instructions
+        df_head_str = df_head
+        prompt = f"""Given the user's question, '{cleaned_question}', write a single, concise English sentence that summarizes the main finding in the data below.
+
+
+Data:
+{df_head_str}
+"""
+        try:
+            resp = litellm.completion(
+                messages=[{"role": "user", "content": prompt}],
+                model=model_name,
+                max_tokens=4096,
+                api_key=api_key,
+                api_base=api_base,
+            )
+        except TypeError:
+            try:
+                resp = litellm.completion(prompt, max_tokens=4096)
+            except TypeError:
+                resp = litellm.completion(prompt)
+
+        # Extract content
+        try:
+            content = resp.choices[0].message.content if hasattr(resp, 'choices') else resp
+        except Exception as exc:
+            content = resp
+
+        if isinstance(content, dict):
+            text = content.get('text', '') or content.get('content', '') or str(content)
+            return text
+        return str(content)
+    except Exception as e:
+        return "Error: The AI summary could not be generated. Please try again later."
