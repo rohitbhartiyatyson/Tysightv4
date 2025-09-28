@@ -114,3 +114,104 @@ Data:
         return str(content)
     except Exception as e:
         return "Error: The AI summary could not be generated. Please try again later."
+
+
+def process_question(kind_name: str, user_question: str, selected_filters: dict) -> dict:
+    """Process a user question end-to-end and return evidence parts:
+    - sql_prompt: prompt sent to SQL LLM
+    - sql_raw_response: raw text response from SQL LLM
+    - dataframe: pandas DataFrame result of SQL
+    - summary_prompt: prompt sent to summary LLM
+    - summary_raw: raw text response from summary LLM
+    """
+    # local imports to avoid top-level cycles
+    from insight_agent.prompt_builder import build_prompt
+    from insight_agent.query_executor import execute_query
+    api_key = os.environ.get('LITELLM_API_KEY')
+    api_base = os.environ.get('LITELLM_API_BASE')
+    # Build SQL prompt
+    sql_prompt = build_prompt(kind_name, user_question, selected_filters)
+
+    # Call SQL LLM
+    try:
+        resp_sql = litellm.completion(
+            messages=[{"role": "user", "content": sql_prompt}],
+            model="gpt-5-mini",
+            max_tokens=1024,
+            api_key=api_key,
+            api_base=api_base,
+        )
+    except TypeError:
+        try:
+            resp_sql = litellm.completion(sql_prompt, max_tokens=1024)
+        except TypeError:
+            resp_sql = litellm.completion(sql_prompt)
+
+    try:
+        sql_raw = resp_sql.choices[0].message.content if hasattr(resp_sql, 'choices') else resp_sql
+    except Exception:
+        sql_raw = resp_sql
+
+    # Try to extract SQL string from raw
+    sql_text = ''
+    try:
+        parsed = json.loads(sql_raw)
+        sql_text = parsed.get('sql','')
+    except Exception:
+        # fallback: try to find JSON substring
+        try:
+            start = sql_raw.index('{')
+            end = sql_raw.rindex('}')+1
+            parsed = json.loads(sql_raw[start:end])
+            sql_text = parsed.get('sql','')
+        except Exception:
+            sql_text = str(sql_raw)
+
+    # Execute SQL to get dataframe
+    df = None
+    try:
+        df = execute_query(kind_name, sql_text)
+    except Exception:
+        # if execution fails, keep df as empty dataframe
+        import pandas as pd
+        df = pd.DataFrame()
+
+    # Build summary prompt and call summary LLM
+    try:
+        df_head = df.head().to_string()
+    except Exception:
+        df_head = str(df)
+    cleaned_question = user_question.splitlines()[-1].strip() if isinstance(user_question, str) else str(user_question)
+    summary_prompt = f"""Given the user's question, '{cleaned_question}', write a single, concise English sentence that summarizes the main finding in the data below.
+
+
+Data:
+{df_head}
+"""
+
+    try:
+        resp_sum = litellm.completion(
+            messages=[{"role": "user", "content": summary_prompt}],
+            model="gpt-5-mini",
+            max_tokens=4096,
+            api_key=api_key,
+            api_base=api_base,
+        )
+    except TypeError:
+        try:
+            resp_sum = litellm.completion(summary_prompt, max_tokens=4096)
+        except TypeError:
+            resp_sum = litellm.completion(summary_prompt)
+
+    try:
+        summary_raw = resp_sum.choices[0].message.content if hasattr(resp_sum, 'choices') else resp_sum
+    except Exception:
+        summary_raw = resp_sum
+
+    return {
+        'sql_prompt': sql_prompt,
+        'sql_raw_response': str(sql_raw),
+        'dataframe': df,
+        'summary_prompt': summary_prompt,
+        'summary_raw': str(summary_raw),
+    }
