@@ -39,6 +39,15 @@ if selected_kind:
             order = info.get('filter_display_order') if isinstance(info, dict) else None
             return (order is None, order if order is not None else 999999)
 
+        # Determine if any filters are defined (presence of filter_display_order on any column)
+        filters_defined = any(
+            (isinstance(info, dict) and info.get('filter_display_order') is not None)
+            for _, info in profile.items()
+        )
+
+        if not filters_defined:
+            st.info("No filters are defined for this Kind. You can define them in your mapping file using the filter_display_order column.")
+
         for col, info in sorted(profile.items(), key=order_key):
             values = info['values'] if isinstance(info, dict) else info
             key = f"filter_{col}"
