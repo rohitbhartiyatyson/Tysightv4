@@ -24,7 +24,6 @@ def get_sql_from_prompt(prompt: str) -> str:
     try:
         # Preferred call signature: litellm.completion(messages=[...], model=..., ...)
         # Diagnostic: print parameters being sent to litellm.completion
-        print(f"[llm_client][NL2SQL] calling litellm.completion with model=gpt-5-mini, api_base={api_base}, api_key_set={bool(api_key)}")
         resp = litellm.completion(
             messages=[{"role": "user", "content": prompt}],
             model="gpt-5-mini",
@@ -67,13 +66,11 @@ def get_summary_from_df(df, user_question: str) -> str:
     Any errors are caught and a user-friendly message returned.
     """
     try:
-        print("[llm_client] get_summary_from_df: start")
         api_key = os.environ.get('LITELLM_API_KEY')
         api_base = os.environ.get('LITELLM_API_BASE')
         model_name = "gpt-5-mini"
 
         if not api_key:
-            print("[llm_client] No API key set")
             return "Error: LITELLM_API_KEY is not set."
 
         try:
@@ -91,10 +88,6 @@ def get_summary_from_df(df, user_question: str) -> str:
 Data:
 {df_head_str}
 """
-        print(f"[llm_client] prompt length={len(prompt)}")
-        # Diagnostic: print the full prompt being sent
-        print(f"[llm_client] prompt=\n{prompt}\n")
-
         try:
             resp = litellm.completion(
                 messages=[{"role": "user", "content": prompt}],
@@ -109,26 +102,15 @@ Data:
             except TypeError:
                 resp = litellm.completion(prompt)
 
-        # Diagnostic: log full raw response object for debugging
-        try:
-            print(f"[llm_client] Full Litellm Response Object: {resp}")
-        except Exception as _:
-            print("[llm_client] Failed to print full response object")
-
         # Extract content
         try:
             content = resp.choices[0].message.content if hasattr(resp, 'choices') else resp
-            print(f"[llm_client] raw content: {str(content)[:200]}")
         except Exception as exc:
             content = resp
-            print(f"[llm_client] content extraction failed: {exc}")
 
         if isinstance(content, dict):
             text = content.get('text', '') or content.get('content', '') or str(content)
             return text
         return str(content)
     except Exception as e:
-        print(f"[llm_client] get_summary_from_df error: {e}")
-        # Detailed representation for debugging
-        print(f"Detailed summary exception: {repr(e)}")
         return "Error: The AI summary could not be generated. Please try again later."

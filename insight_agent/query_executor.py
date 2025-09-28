@@ -21,13 +21,10 @@ def execute_query(kind_name: str, sql_query: str) -> pd.DataFrame:
     # Use duckdb to run SQL directly on the parquet file
     con = duckdb.connect(database=':memory:')
     try:
-        print(f"[query_executor] datasets_dir={datasets_dir}, parquet_path={parquet_path}")
         # Normalize path for SQL
         parquet_sql_path = parquet_path.replace('\\','/')
-        print(f"[query_executor] parquet_sql_path={parquet_sql_path}")
         # Create a view named 'data' that reads from the parquet file
         con.execute(f"CREATE VIEW data AS SELECT * FROM read_parquet('{parquet_sql_path}')")
-        print("[query_executor] created view data from parquet")
 
         # Replace table references in the incoming SQL to point to 'data'
         import re
@@ -42,11 +39,8 @@ def execute_query(kind_name: str, sql_query: str) -> pd.DataFrame:
         # Match patterns like: FROM `my table`, FROM "my table", FROM 'my table', FROM [my table], FROM schema.table, FROM table
         pattern = r"(FROM\s+)(`[^`]+`|\"[^\"]+\"|'[^']+'|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)"
         sql_fixed = re.sub(pattern, replace_from, sql_query, flags=re.IGNORECASE)
-        print(f"[query_executor] sql_fixed={sql_fixed}")
 
         df = con.execute(sql_fixed).df()
-        print(f"[query_executor] query returned {len(df)} rows and {len(df.columns)} columns")
         return df
     finally:
-        print("[query_executor] closing duckdb connection")
         con.close()
