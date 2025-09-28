@@ -20,8 +20,11 @@ if st.button('Create Kind'):
     elif not kind_name or kind_name.strip() == '':
         st.error('Please select a valid Kind Name.')
     else:
-        success, message = create_kind(mapping, kind_name.strip(), sample, kind_description)
-        if success:
-            st.success(message)
-        else:
-            st.error(message)
+        try:
+            success, message = create_kind(mapping, kind_name.strip(), sample, kind_description)
+            if success:
+                st.success(message)
+            else:
+                st.error(message)
+        except Exception as e:
+            st.error(str(e))
