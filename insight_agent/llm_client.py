@@ -84,9 +84,7 @@ def get_summary_from_df(df, user_question: str) -> str:
         prompt = f'The user asked: "{user_question}". Based on this data, write a one-sentence summary of the answer. Data: {df_head}'
         print(f"[llm_client] prompt length={len(prompt)}")
         # Diagnostic: print the full prompt being sent
-        print(f"[llm_client] prompt=
-{prompt}
-")
+        print(f"[llm_client] prompt=\n{prompt}\n")
 
         try:
             resp = litellm.completion(
