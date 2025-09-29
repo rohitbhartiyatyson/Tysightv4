@@ -94,16 +94,43 @@ if selected_kind:
         for col, info in sorted(profile.items(), key=order_key):
             values = info['values'] if isinstance(info, dict) else info
             values_list = list(values) if values is not None else []
-            # include the selected_kind in the key so changing kinds creates fresh widgets
-            key = f"filter_{selected_kind}_{col}"
+            # build a stable widget key per column (do NOT include kind in key to avoid leaking across page reloads)
+            key = f"filter_{col}"
 
-            # initialize session_state for this widget to the first value when kind first seen
+            # ensure filters_by_kind mapping exists for this kind
             if selected_kind not in st.session_state['filters_by_kind']:
                 st.session_state['filters_by_kind'][selected_kind] = {}
-            if key not in st.session_state:
+
+            # initializer guard: track last init per filter per kind to avoid repeated forcing
+            last_init_key = f"_init_{selected_kind}_{col}"
+
+            # Decide whether to set a default:
+            # - If widget key missing in session_state -> set default
+            # - If current value not present in new options (kind changed) -> reset once
+            default_forced = False
+            current_val = st.session_state.get(key, None)
+
+            if key not in st.session_state or current_val is None:
+                # set default only once
                 default_val = values_list[0] if values_list else ''
                 st.session_state[key] = default_val
                 st.session_state['filters_by_kind'][selected_kind][col] = default_val
+                default_forced = True
+                st.write(f"[debug] {key} options={values_list} before=None forced_default={default_forced}")
+            else:
+                # current value exists; if it's no longer in options and we haven't re-initialized for this kind, reset
+                if (isinstance(current_val, list) and any(v not in values_list for v in current_val)) or (not isinstance(current_val, list) and current_val not in values_list):
+                    if not st.session_state.get(last_init_key, False):
+                        default_val = values_list[0] if values_list else ''
+                        st.session_state[key] = default_val
+                        st.session_state['filters_by_kind'][selected_kind][col] = default_val
+                        st.session_state[last_init_key] = True
+                        default_forced = True
+                        st.write(f"[debug] {key} options={values_list} before={current_val} forced_default={default_forced}")
+                    else:
+                        st.write(f"[debug] {key} options={values_list} before={current_val} forced_default=False (already init for this kind)")
+                else:
+                    st.write(f"[debug] {key} options={values_list} before={current_val} forced_default=False")
 
             # Render selectbox tied to session_state key so the selected value is persistent
             val = st.selectbox(f"Filter by {col}", options=values_list, key=key)
