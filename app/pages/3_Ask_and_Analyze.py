@@ -155,8 +155,15 @@ if selected_kind:
                     except Exception:
                         pass
 
-            # Render selectbox tied to session_state key so the selected value is persistent
-            val = st.selectbox(f"Filter by {col}", options=values_list, key=key)
+            # Render widget (multiselect if indicated) tied to session_state key so the selected value is persistent
+            is_multi = isinstance(info, dict) and info.get('multiselect', False)
+            if is_multi:
+                # ensure state is a list
+                if not isinstance(st.session_state.get(key, None), list):
+                    st.session_state[key] = [st.session_state.get(key)] if st.session_state.get(key) is not None else []
+                val = st.multiselect(f"Filter by {col}", options=values_list, key=key)
+            else:
+                val = st.selectbox(f"Filter by {col}", options=values_list, key=key)
             # keep the filters_by_kind mirror up to date
             st.session_state['filters_by_kind'].setdefault(selected_kind, {})
             st.session_state['filters_by_kind'][selected_kind][col] = st.session_state.get(key)
