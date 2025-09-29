@@ -24,7 +24,14 @@ jobs:
         env:
           TEST_MODE: '1'
         run: |
-          pytest -q
+          pytest -q --junitxml=pytest-junit.xml | tee pytest-full.log
+      - name: Upload pytest artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-artifacts
+          path: |
+            pytest-junit.xml
+            pytest-full.log
 
   e2e:
     runs-on: ubuntu-latest
