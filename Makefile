@@ -10,4 +10,4 @@ e2e-test:
 	@echo "e2e-test placeholder"
 
 handoff-update:
-	@echo "handoff-update placeholder"
+	@echo "Reminder: Manually update master_spec.md and capsule.md before regenerating bundles."

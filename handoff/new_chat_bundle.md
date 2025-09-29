@@ -1,20 +1,25 @@
-Objective: Add a user-visible warning when a selected Kind has no defined filters.
+# Project Capsule: Tysightv4 V2
 
-Implemented: Added a conditional check in app/pages/3_Ask_and_Analyze.py that inspects the loaded profile for any filter_display_order values. If none are present, the UI displays an informational message guiding users to add filter_display_order in their mapping file.
 
-Files changed:
-- app/pages/3_Ask_and_Analyze.py (added filters_defined check and st.info warning)
+## Objective
+Build a modular Streamlit app that onboards data and answers natural language questions using a robust, multi-tool AI agent.
 
-Commit: feat: Add no-filters-found warning
-Branch: feat/no-filters-warning
 
-How to reproduce locally:
-1. Checkout the branch feat/no-filters-warning
-2. Start the Streamlit app (e.g., streamlit run app/pages/3_Ask_and_Analyze.py)
-3. Select a Kind whose mapping/profile lacks filter_display_order keys
-4. Observe the info message near filters area
+## Current State (V2 Complete)
+The application is feature-complete for V2. The `main` branch contains a stable, intelligent agent built with LangChain. The agent uses two distinct reasoning paths:
+1.  A "Specialist" path for complex, predefined analytical questions (e.g., YoY performance).
+2.  A "Generalist" safety-net path for simple, ad-hoc SQL queries.
 
-Status: smoke tests failed due to missing pytest in the environment when running make smoke-test. No changes were made beyond the single UI edit.
+
+All major V1 and V2 features are merged into `main`. The application is ready for the next phase of development.
+
+
+## Next Steps
+Begin planning the V3 roadmap, which includes:
+* Graphing and charting capabilities.
+* Advanced HTML report downloads.
+* Data harmonization for multi-dataset joins.
+
 
 ---
 # Spec Extract: Tysightv4 V2
@@ -33,6 +38,10 @@ The application is a multi-tool AI agent built with LangChain. It has two reason
 
 ### Column `type` Vocabulary
 `product_attribute`, `location_attribute`, `mod_attribute`, `market_or_store`, `time_abs`, `time_agg`, `pos_measure`, `mod_measure`, `location_measure`, `media_measure`
+
+
+### Column `data_type` Vocabulary
+`string`, `integer`, `decimal`, `date`, `datetime`
 
 
 ## Critical SQL Rules
