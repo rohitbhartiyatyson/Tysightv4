@@ -96,8 +96,15 @@ if st.button('Ask'):
 
     try:
         executor = build_agent()
+        # enable verbose tracing on the executor when possible
+        try:
+            setattr(executor, 'verbose', True)
+        except Exception:
+            pass
         # pass selected_kind into the agent input so it can locate the correct dataset
         agent_response = executor.invoke({"input": question, "kind": selected_kind})
+        # print full agent response for debugging (includes intermediate_steps)
+        print("[agent_response]", agent_response)
     except Exception as e:
         st.error(f"Agent execution failed: {e}")
         agent_response = {"error": str(e)}
