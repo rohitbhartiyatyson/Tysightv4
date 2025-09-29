@@ -1,0 +1,12 @@
+RUN RECEIPT: Add PR template
+
+Actions performed:
+- Created branch chore/add-pr-template
+- Added .github/pull_request_template.md with the handoff documentation checklist
+- Committed with message: chore: Add pull request template
+- Opened PR #34 and squash-merged it into main
+- Deleted remote branch chore/add-pr-template
+
+Files changed:
+- .github/pull_request_template.md
+
