@@ -1,50 +1,63 @@
-from langchain.agents import create_react_agent, AgentExecutor
-from langchain.llms.fake import FakeListLLM
-
+from langchain_core.runnables.base import RunnableLambda
 from insight_agent.tools import (
     intent_recognition_tool,
     metric_selection_tool,
     sql_generation_tool,
     data_synthesis_tool,
 )
-
-from langchain_core.prompts import PromptTemplate
-
-SYSTEM_PROMPT_TEMPLATE = '''You are an analyst agent. When given a user question, follow this sequence:
-1) Use the intent_recognition_tool to identify intent and entities from the user's question.
-2) Use the metric_selection_tool with the intent to select relevant metrics.
-3) Use the sql_generation_tool to generate SQL given intent, entities, and selected metrics.
-4) Use the data_synthesis_tool to summarize results from the returned dataframe head.
-
-Call tools only as needed and format outputs appropriately.
-
-You have access to the following tools:
-{tools}
-
-Use the following format:
-Question: the input question you must answer
-Thought: you should always think about what to do
-Action: the action to take, should be one of [{tool_names}]
-Action Input: the input to the action
-Observation: the result of the action
-... (this Thought/Action/Action Input/Observation can repeat N times)
-Thought: I now know the final answer
-Final Answer: the final answer to the original input question
-
-Begin!
-
-Question: {input}
-Thought:{agent_scratchpad}'''
+from insight_agent.query_executor import execute_query
+import pandas as pd
+import json
 
 
 def build_agent(llm=None):
-    # Use a FakeListLLM by default for deterministic responses in tests if not provided
-    if llm is None:
-        llm = FakeListLLM(responses=["RESPONSE_PLACEHOLDER"])
+    """Build a simple LCEL-style runnable that executes the pipeline deterministically:
+    Intent -> Metrics -> SQL -> Run Query -> Summary
 
-    tools = [intent_recognition_tool, metric_selection_tool, sql_generation_tool, data_synthesis_tool]
-    prompt = PromptTemplate.from_template(SYSTEM_PROMPT_TEMPLATE)
-    agent = create_react_agent(llm=llm, tools=tools, prompt=prompt)
-    # AgentExecutor wraps the agent into a runnable executor
-    executor = AgentExecutor.from_agent_and_tools(agent, tools, verbose=True, handle_parsing_errors=True)
-    return executor
+    The returned object implements .invoke(inputs) for compatibility with the UI.
+    """
+
+    def run_chain(inputs: dict):
+        question = inputs.get('input')
+        kind = inputs.get('kind') or ''
+
+        intermediates = []
+
+        # 1) Intent recognition (LLM-backed tool)
+        intent_json = intent_recognition_tool.func(question)
+        try:
+            parsed_intent = json.loads(intent_json) if isinstance(intent_json, str) else intent_json
+        except Exception:
+            parsed_intent = {"intent": "unknown", "entities": {}}
+        intermediates.append(('intent', parsed_intent))
+
+        intent = parsed_intent.get('intent') if isinstance(parsed_intent, dict) else str(parsed_intent)
+
+        # 2) Metric selection (code tool)
+        metrics = metric_selection_tool.func(intent)
+        intermediates.append(('metrics', metrics))
+
+        # 3) SQL generation
+        sql_prompt = f"intent={intent}; entities={parsed_intent.get('entities',{})}; metrics={metrics}"
+        sql_text = sql_generation_tool.func(sql_prompt)
+        intermediates.append(('sql', sql_text))
+
+        # 4) Execute SQL against DuckDB (using existing executor)
+        df = pd.DataFrame()
+        try:
+            df = execute_query(kind, sql_text)
+            intermediates.append(('query_result_head', df.head().to_string()))
+        except Exception as e:
+            intermediates.append(('query_error', str(e)))
+
+        # 5) Summary
+        df_head = df.head().to_string() if not df.empty else ''
+        summary = data_synthesis_tool.func(df_head)
+        intermediates.append(('summary', summary))
+
+        return {
+            'final_answer': summary,
+            'intermediate_steps': intermediates,
+        }
+
+    return RunnableLambda(run_chain)
