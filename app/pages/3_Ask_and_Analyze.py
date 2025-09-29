@@ -95,7 +95,10 @@ if selected_kind:
             values = info['values'] if isinstance(info, dict) else info
             values_list = list(values) if values is not None else []
             # build a stable widget key per column (do NOT include kind in key to avoid leaking across page reloads)
-            key = f"filter_{col}"
+            # sanitize column name to letters/numbers/underscore
+            import re
+            safe_col = re.sub(r'[^0-9a-zA-Z_]', '_', str(col))
+            key = f"filter_{safe_col}"
 
             # ensure filters_by_kind mapping exists for this kind
             if selected_kind not in st.session_state['filters_by_kind']:
