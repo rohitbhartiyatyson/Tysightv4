@@ -198,9 +198,9 @@ def intent_recognition_tool(user_question: str) -> str:
     if not api_key:
         return json.dumps({"error": "LITELLM_API_KEY not set"})
 
-    valid_intents = IntentSchema.names()
+    valid_intents = IntentSchema.names() + ["direct_sql_query"]
     prompt = f"""You are a classifier. Analyze the user's question and return ONLY a JSON object with two keys:
-- intent: one of the valid intent names exactly as listed below
+- intent: one of the valid intent names exactly as listed below (including 'direct_sql_query' for simple SQL requests)
 - entities: a JSON object mapping entity types to values (e.g., brand: "Jimmy Dean")
 
 Valid intents: {valid_intents}
@@ -208,7 +208,7 @@ Valid intents: {valid_intents}
 User question:
 {user_question}
 
-Choose the single best intent from the list and respond only with valid JSON, e.g. {{"intent": "sales_performance", "entities": {{}}}} (no explanatory text)."""
+If the question is a simple request that can be answered with a single SQL query, choose the intent 'direct_sql_query'. Otherwise, choose one of the specialist intents. Respond only with valid JSON, e.g. {{"intent": "direct_sql_query", "entities": {{}}}} (no explanatory text)."""
 
     try:
         resp = litellm.completion(
