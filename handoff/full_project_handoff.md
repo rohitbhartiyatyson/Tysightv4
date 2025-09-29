@@ -64,6 +64,8 @@ These are the critical "do's and don'ts" we have learned. They are the ground ru
     * **Implementer (OpenHands)**: Executes specific, small, deterministic tasks.
 * **The Golden Rule: Test-Then-Merge Mandate**: We never merge a pull request into `main` until it has passed both automated tests (CI) and a successful manual test by the Product Owner for any user-facing changes.
 
+* **Pull Request Template & Checklist**: The Pull Request will automatically be populated with a template. The developer must fill out the description and complete the mandatory 'Handoff Documentation Checklist' before the PR is ready for review and merge.
+
 
 ### 2. Core Architectural Principles
 * **Data Model is One-to-One**: A "Kind" can only have one data "Instance" at a time. This simplifies the app to a "point-in-time" analysis tool.
