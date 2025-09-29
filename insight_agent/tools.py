@@ -240,7 +240,72 @@ Respond only with valid JSON (no explanatory text)."""
 
 @tool
 def metric_selection_tool(intent: str) -> list:
-    """Select metrics based on the detected intent. Pure code logic (no LLM call)."""
-    if intent == "performance_summary":
-        return ['dollar_sales', 'dollar_sales_ya', 'unit_sales', 'unit_sales_ya']
-    return []
+    """Select metrics based on the detected intent. Pure code logic (no LLM call).
+
+    Behavior:
+    - For performance_summary: read the kind mapping CSV under the domain catalog and
+      return all canonical names whose type indicates a POS measure.
+    - The domain root can be overridden with the DOMAIN_CATALOG_ROOT env var (used in tests).
+    - The kind to inspect can be provided via METRIC_KIND env var; otherwise no-op.
+    """
+    if intent != "performance_summary":
+        return []
+
+    # Determine domain/catalog root and kind
+    domain_root = os.environ.get('DOMAIN_CATALOG_ROOT', os.path.join('domain', 'catalog'))
+    kind = os.environ.get('METRIC_KIND')
+    if not kind:
+        return []
+
+    kind_dir = os.path.join(domain_root, 'kinds', kind)
+    if not os.path.exists(kind_dir):
+        return []
+
+    # find latest v* folder
+    try:
+        versions = [d for d in os.listdir(kind_dir) if os.path.isdir(os.path.join(kind_dir, d))]
+        versions = sorted(versions)
+    except Exception:
+        versions = []
+
+    candidate_files = []
+    for v in reversed(versions):
+        csv_path = os.path.join(kind_dir, v, 'required_mapping.csv')
+        if os.path.exists(csv_path):
+            candidate_files.append(csv_path)
+            break
+
+    # fallback: look directly in kind_dir
+    if not candidate_files:
+        csv_path = os.path.join(kind_dir, 'required_mapping.csv')
+        if os.path.exists(csv_path):
+            candidate_files.append(csv_path)
+
+    pos_cols = []
+    for path in candidate_files:
+        try:
+            with open(path, 'r', newline='') as fh:
+                # simple CSV parse: header first
+                header = fh.readline().strip().split(',')
+                # find indices
+                ci_type = None
+                ci_canonical = None
+                for i, h in enumerate(header):
+                    hn = h.strip().lower()
+                    if hn in ('type',):
+                        ci_type = i
+                    if hn in ('canonical_name', 'canonicalname'):
+                        ci_canonical = i
+                # parse remaining lines
+                for line in fh:
+                    parts = [p.strip() for p in line.strip().split(',')]
+                    if not parts or len(parts) <= max(ci_type or 0, ci_canonical or 0):
+                        continue
+                    t = parts[ci_type] if ci_type is not None else ''
+                    canonical = parts[ci_canonical] if ci_canonical is not None else ''
+                    if canonical and t and 'pos' in t.lower():
+                        pos_cols.append(canonical)
+        except Exception:
+            continue
+
+    return pos_cols
