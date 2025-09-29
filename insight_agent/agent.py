@@ -38,8 +38,13 @@ def build_agent(llm=None):
         intermediates.append(('metrics', metrics))
 
         # 3) SQL generation
-        sql_prompt = f"intent={intent}; entities={parsed_intent.get('entities',{})}; metrics={metrics}"
-        sql_text = sql_generation_tool.func(sql_prompt)
+        sql_input = {
+            'question': question,
+            'kind': kind,
+            'filters': inputs.get('filters') or inputs.get('selected_filters') or {},
+            'metrics': metrics,
+        }
+        sql_text = sql_generation_tool.func(sql_input)
         intermediates.append(('sql', sql_text))
 
         # 4) Execute SQL against DuckDB (using existing executor)
