@@ -36,10 +36,13 @@ def _canonical_style(name: str) -> str:
 
 def normalize_sql(sql: str, kind: str) -> str:
     # Harden: reject CTEs and subqueries to avoid unsafe SQL patterns
-    if 'WITH ' in sql.upper():
+    # Reject common CTE usage (WITH ...) at the start of the query
+    stripped = sql.lstrip()
+    if re.match(r'(?i)^\s*WITH\b', stripped):
         raise ValueError('CTE usage is disallowed in user SQL')
-    if '(' in sql and 'SELECT ' in sql.upper():
-        # basic subquery detection
+
+    # Detect explicit subquery patterns like FROM (SELECT ...) or EXISTS (SELECT ...)
+    if re.search(r"(?i)FROM\s*\(\s*SELECT\b", sql) or re.search(r"(?i)EXISTS\s*\(\s*SELECT\b", sql):
         raise ValueError('Subqueries are disallowed in user SQL')
     """Normalize SQL to enforce canonical naming style and symmetric LOWER() on string comparisons.
 
