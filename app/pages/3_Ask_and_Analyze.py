@@ -118,7 +118,11 @@ if st.button('Ask'):
 
     # Display summary
     st.markdown('**Summary:**')
-    st.markdown(final_answer)
+    # Render the final answer as markdown to preserve wrapping and formatting
+    try:
+        st.markdown(final_answer)
+    except Exception:
+        st.write(final_answer)
 
     # Display agent evidence (chain of thought / intermediate steps)
     with st.expander('Show Evidence'):
