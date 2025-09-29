@@ -23,13 +23,19 @@ def build_agent(llm=None):
 
         intermediates = []
 
-        # 1) Intent recognition (LLM-backed tool)
-        intent_json = intent_recognition_tool.func(question)
-        try:
-            parsed_intent = json.loads(intent_json) if isinstance(intent_json, str) else intent_json
-        except Exception:
-            parsed_intent = {"intent": "unknown", "entities": {}}
-        intermediates.append(('intent', parsed_intent))
+        # 1) Deterministic guard: if the question starts with a SQL SELECT, bypass the LLM
+        parsed_intent = None
+        if isinstance(question, str) and question.strip().lower().startswith('select'):
+            parsed_intent = {"intent": "direct_sql_query", "entities": {}}
+            intermediates.append(('intent', parsed_intent))
+        else:
+            # 1a) Intent recognition (LLM-backed tool)
+            intent_json = intent_recognition_tool.func(question)
+            try:
+                parsed_intent = json.loads(intent_json) if isinstance(intent_json, str) else intent_json
+            except Exception:
+                parsed_intent = {"intent": "unknown", "entities": {}}
+            intermediates.append(('intent', parsed_intent))
 
         intent = parsed_intent.get('intent') if isinstance(parsed_intent, dict) else str(parsed_intent)
 
