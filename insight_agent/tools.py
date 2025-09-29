@@ -205,16 +205,17 @@ def intent_recognition_tool(user_question: str) -> str:
         return json.dumps({"error": "LITELLM_API_KEY not set"})
 
     valid_intents = IntentSchema.names() + ["direct_sql_query"]
-    prompt = f"""You are a classifier. Analyze the user's question and return ONLY a JSON object with two keys:
+    prompt = f"""You are a classifier. Analyze the user's question and return ONLY a JSON object with three keys:
 - intent: one of the valid intent names exactly as listed below (including 'direct_sql_query' for simple SQL requests)
 - entities: a JSON object mapping entity types to values (e.g., brand: "Jimmy Dean")
+- dimensions: a JSON list of canonical column names (strings) to GROUP BY (may be empty)
 
 Valid intents: {valid_intents}
 
 User question:
 {user_question}
 
-If the question is a simple request that can be answered with a single SQL query, choose the intent 'direct_sql_query'. Otherwise, choose one of the specialist intents. Respond only with valid JSON, e.g. {{"intent": "direct_sql_query", "entities": {{}}}} (no explanatory text)."""
+If the question is a simple request that can be answered with a single SQL query, choose the intent 'direct_sql_query'. Also, extract any dimensions (canonical column names) that should be used for GROUP BY into the 'dimensions' list. Respond only with valid JSON, e.g. {{"intent": "direct_sql_query", "entities": {{}}, "dimensions": []}} (no explanatory text)."""
 
     try:
         resp = litellm.completion(
@@ -237,15 +238,20 @@ If the question is a simple request that can be answered with a single SQL query
 
     try:
         parsed = json.loads(content)
+        # ensure dimensions key exists
+        if 'dimensions' not in parsed:
+            parsed['dimensions'] = []
         return json.dumps(parsed)
     except Exception:
         try:
             start = str(content).index('{')
             end = str(content).rindex('}') + 1
             parsed = json.loads(str(content)[start:end])
+            if 'dimensions' not in parsed:
+                parsed['dimensions'] = []
             return json.dumps(parsed)
         except Exception:
-            return json.dumps({"intent": "unknown", "entities": {}})
+            return json.dumps({"intent": "unknown", "entities": {}, "dimensions": []})
 
 
 @tool
