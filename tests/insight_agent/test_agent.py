@@ -20,8 +20,10 @@ def test_agent_flow(monkeypatch):
     llm = FakeListLLM(responses=fake_responses)
     executor = build_agent(llm=llm)
 
-    # Call the agent with a sample question
-    result = executor.run("how did jimmy dean perform?")
+    # Call the agent with a sample question using invoke (executor.run unsupported)
+    out = executor.invoke({"input": "how did jimmy dean perform?"})
+    # The executor may return a dict; stringify and assert
+    result = json.dumps(out)
 
     # Ensure the final result contains the summary text we provided
     assert "Jimmy Dean saw a 10% increase in dollar sales" in result
