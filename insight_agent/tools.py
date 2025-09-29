@@ -97,7 +97,7 @@ def intent_recognition_tool(user_question: str) -> str:
     if not api_key:
         return json.dumps({"error": "LITELLM_API_KEY not set"})
 
-    prompt = f"""You are a classifier. Analyze the user's question and return ONLY a JSON object with two keys: \n- intent: a short intent string such as \"performance_summary\" or \"compare_brands\"\n- entities: a JSON object mapping entity types to values (e.g., {\"brand\": \"Jimmy Dean\"})\n\nUser question:\n{user_question}\n\nRespond only with valid JSON (no explanatory text)."""
+    prompt = f"""You are a classifier. Analyze the user's question and return ONLY a JSON object with two keys:\n- intent: a short intent string such as \"performance_summary\" or \"compare_brands\"\n- entities: a JSON object mapping entity types to values (e.g., brand: \"Jimmy Dean\")\n\nUser question:\n{user_question}\n\nRespond only with valid JSON (no explanatory text)."""
 
     try:
         resp = litellm.completion(
