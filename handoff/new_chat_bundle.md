@@ -15,8 +15,6 @@ How to reproduce locally:
 4. Observe the info message near filters area
 
 Status: smoke tests failed due to missing pytest in the environment when running make smoke-test. No changes were made beyond the single UI edit.
-
----
 # Spec Extract: Tysightv4 V2
 
 
