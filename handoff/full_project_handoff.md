@@ -90,3 +90,9 @@ These are the critical "do's and don'ts" we have learned. They are the ground ru
 * **Do**: Run `make smoke-test` after every single code change.
 * **Do**: Run servers in the background (`nohup ... &`) to prevent the agent from hanging.
 * **Do**: Ensure all handoff documents (`master_spec.md`, `new_chat_bundle.md`) are updated at the end of every major feature merge.
+
+
+### 6. The Handoff Documentation Mandate
+* **Do**: After every major feature is merged into `main`, perform a dedicated documentation update to keep this handoff document and its sources (`master_spec.md`, `capsule.md`) accurate.
+* **Don't**: Assume the documentation is in sync. Stale documentation is a critical bug.
+* **Learning**: Our process requires a formal step to update our human-readable documents, not just our code. We will create a `make handoff-update` command to remind us of this crucial final step in our workflow. **This document must always be a living document.**
