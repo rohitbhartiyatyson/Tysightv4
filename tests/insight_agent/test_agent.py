@@ -25,5 +25,3 @@ def test_agent_flow(monkeypatch):
 
     # Ensure the final result contains the summary text we provided
     assert "Jimmy Dean saw a 10% increase in dollar sales" in result
-
-*** End of File
