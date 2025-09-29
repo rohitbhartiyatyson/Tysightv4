@@ -1,6 +1,6 @@
 import json
 import litellm
-from insight_agent.llm_client import get_sql_from_prompt
+from insight_agent.tools import sql_generation_tool
 
 
 def test_get_sql_from_prompt_monkeypatch(monkeypatch):
@@ -10,5 +10,5 @@ def test_get_sql_from_prompt_monkeypatch(monkeypatch):
 
     monkeypatch.setattr(litellm, 'completion', fake_completion)
 
-    sql = get_sql_from_prompt('irrelevant')
+    sql = sql_generation_tool.func('irrelevant')
     assert "SELECT * FROM table" in sql
