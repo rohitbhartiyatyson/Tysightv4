@@ -92,24 +92,27 @@ def sql_generation_tool(input_data) -> str:
         else:
             filters_text = 'No filters selected.'
 
-        prompt = f"""You are a SQL generator. Build a single SQL query (no joins) that answers the user's question.
-CRITICAL RULE: In the generated SQL, you must use the canonical_name for all column references. You must never use the original_name or description.
-Include only mapped & present columns. Enforce LIMIT and no SELECT *.
+        # Build a constrained prompt that explicitly provides the metrics list and strict rules
+        prompt = f"""You are a SQL generator. Your only job is to write a single SQL query (no joins) that answers the user's question using the provided METRICS list.
 
-Kind: {kind}
-Schema:
-{schema_text}
+INPUTS (do not invent or use any other inputs):
+KIND: {kind}
+SCHEMA: {schema_text}
+FILTERS: {filters_text}
+METRICS: {metrics}
+USER_QUESTION: {question}
 
-Selected Filters:
-{filters_text}
+RULES (CRITICAL):
+1) Use ONLY the canonical_name for all column references. NEVER use original_name or description.
+2) Use ONLY columns from the provided METRICS list for measures. Do NOT include other measure columns.
+3) Do not perform joins. Single table only.
+4) Do not use SELECT *. Explicitly list columns to return.
+5) Ensure the query includes a LIMIT clause (e.g., LIMIT 10) unless an explicit limit is provided in the question.
 
-Metrics: {metrics}
-
-User question:
-{question}
-
-Respond with a JSON object like: {{"sql": "SELECT ... LIMIT 10"}}
+OUTPUT:
+Respond with EXACTLY one JSON object and nothing else. The object must have a single key 'sql' whose value is the SQL query string. Example: {{"sql": "SELECT dollar_sales FROM data WHERE brand='X' LIMIT 10"}}
 """
+
 
     # Call the LLM with the assembled prompt
     try:
