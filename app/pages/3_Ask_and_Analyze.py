@@ -116,7 +116,12 @@ if selected_kind:
                 st.session_state[key] = default_val
                 st.session_state['filters_by_kind'][selected_kind][col] = default_val
                 default_forced = True
-                st.write(f"[debug] {key} options={values_list} before=None forced_default={default_forced}")
+                try:
+                    import logging
+                    logger = logging.getLogger('ask_and_analyze')
+                    logger.debug(f"{key} options={values_list} before=None forced_default={default_forced}")
+                except Exception:
+                    pass
             else:
                 # current value exists; if it's no longer in options and we haven't re-initialized for this kind, reset
                 if (isinstance(current_val, list) and any(v not in values_list for v in current_val)) or (not isinstance(current_val, list) and current_val not in values_list):
@@ -126,11 +131,26 @@ if selected_kind:
                         st.session_state['filters_by_kind'][selected_kind][col] = default_val
                         st.session_state[last_init_key] = True
                         default_forced = True
-                        st.write(f"[debug] {key} options={values_list} before={current_val} forced_default={default_forced}")
+                        try:
+                            import logging
+                            logger = logging.getLogger('ask_and_analyze')
+                            logger.debug(f"{key} options={values_list} before={current_val} forced_default={default_forced}")
+                        except Exception:
+                            pass
                     else:
-                        st.write(f"[debug] {key} options={values_list} before={current_val} forced_default=False (already init for this kind)")
+                        try:
+                            import logging
+                            logger = logging.getLogger('ask_and_analyze')
+                            logger.debug(f"{key} options={values_list} before={current_val} forced_default=False (already init for this kind)")
+                        except Exception:
+                            pass
                 else:
-                    st.write(f"[debug] {key} options={values_list} before={current_val} forced_default=False")
+                    try:
+                        import logging
+                        logger = logging.getLogger('ask_and_analyze')
+                        logger.debug(f"{key} options={values_list} before={current_val} forced_default=False")
+                    except Exception:
+                        pass
 
             # Render selectbox tied to session_state key so the selected value is persistent
             val = st.selectbox(f"Filter by {col}", options=values_list, key=key)
