@@ -46,5 +46,5 @@ def build_agent(llm=None):
     prompt = PromptTemplate.from_template(SYSTEM_PROMPT_TEMPLATE)
     agent = create_react_agent(llm=llm, tools=tools, prompt=prompt)
     # AgentExecutor wraps the agent into a runnable executor
-    executor = AgentExecutor.from_agent_and_tools(agent, tools, verbose=True)
+    executor = AgentExecutor.from_agent_and_tools(agent, tools, verbose=True, handle_parsing_errors=True)
     return executor
