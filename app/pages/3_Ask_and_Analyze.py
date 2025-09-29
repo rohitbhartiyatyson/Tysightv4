@@ -50,7 +50,9 @@ if selected_kind:
 
         for col, info in sorted(profile.items(), key=order_key):
             values = info['values'] if isinstance(info, dict) else info
-            key = f"filter_{col}"
+            # include the selected_kind in the key so changing kinds creates fresh widgets
+            key = f"filter_{selected_kind}_{col}"
+            # ensure the first option is selected by default
             val = st.selectbox(f"Filter by {col}", options=[''] + list(values), key=key, index=0)
             if val:
                 selected_filters_ui[col] = val
