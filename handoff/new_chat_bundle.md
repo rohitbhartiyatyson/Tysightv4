@@ -20,8 +20,12 @@ Begin planning the V3 roadmap, which includes:
 * Advanced HTML report downloads.
 * Data harmonization for multi-dataset joins.
 
+<<<<<<< HEAD
 
 ---
+=======
+Status: smoke tests failed due to missing pytest in the environment when running make smoke-test. No changes were made beyond the single UI edit.
+>>>>>>> 230c2fc (docs: Regenerate correct handoff bundle)
 # Spec Extract: Tysightv4 V2
 
 
