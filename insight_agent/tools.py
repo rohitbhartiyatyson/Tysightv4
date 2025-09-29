@@ -143,37 +143,34 @@ Respond with a JSON object like: {{"sql": "SELECT ... LIMIT 10"}}
             return ''
 
 @tool
-def intent_recognition_tool(user_question: str) -> str:
-    """Classify the user's intent and extract simple entities.
+def data_synthesis_tool(input_text: str) -> str:
+    """Synthesize a single-sentence summary from a dataframe head string or combined input.
 
-    Returns a JSON string with keys: intent (string) and entities (object).
-    Example: {"intent": "performance_summary", "entities": {"brand": "Jimmy Dean"}}
+    This tool accepts a single string (to be compatible with LangChain tool string inputs).
     """
     api_key = os.environ.get('LITELLM_API_KEY')
     api_base = os.environ.get('LITELLM_API_BASE')
+    model_name = "gpt-5-mini"
+
     if not api_key:
-        return json.dumps({"error": "LITELLM_API_KEY not set"})
+        return "Error: LITELLM_API_KEY is not set."
 
-    prompt = f"""You are a classifier. Analyze the user's question and return ONLY a JSON object with two keys:
-- intent: a short intent string such as "performance_summary" or "compare_brands"
-- entities: a JSON object mapping entity types to values (e.g., brand: "Jimmy Dean")
-
-User question:
-{user_question}
-
-Respond only with valid JSON (no explanatory text)."""
+    # Treat the provided input_text as the dataframe head for now
+    df_head = input_text
+    cleaned_question = ""  # optional
+    prompt = f"""Given the user's question, '{cleaned_question}', write a single, concise English sentence that summarizes the main finding in the data below.\n\n\nData:\n{df_head}\n"""
 
     try:
         resp = litellm.completion(
             messages=[{"role": "user", "content": prompt}],
-            model="gpt-5-mini",
-            max_tokens=512,
+            model=model_name,
+            max_tokens=4096,
             api_key=api_key,
             api_base=api_base,
         )
     except TypeError:
         try:
-            resp = litellm.completion(prompt, max_tokens=512)
+            resp = litellm.completion(prompt, max_tokens=4096)
         except TypeError:
             resp = litellm.completion(prompt)
 
@@ -182,25 +179,7 @@ Respond only with valid JSON (no explanatory text)."""
     except Exception:
         content = resp
 
-    # Ensure the output is a JSON string
-    try:
-        parsed = json.loads(content)
-        return json.dumps(parsed)
-    except Exception:
-        # Try to extract JSON substring
-        try:
-            start = str(content).index('{')
-            end = str(content).rindex('}') + 1
-            parsed = json.loads(str(content)[start:end])
-            return json.dumps(parsed)
-        except Exception:
-            return json.dumps({"intent": "unknown", "entities": {}})
-
-
-@tool
-def metric_selection_tool(intent: str) -> list:
-    """Select metrics based on the detected intent. Pure code logic (no LLM call)."""
-    if intent == "performance_summary":
-        return ['dollar_sales', 'dollar_sales_ya', 'unit_sales', 'unit_sales_ya']
-    # default fallback
-    return []
+    if isinstance(content, dict):
+        text = content.get('text', '') or content.get('content', '') or str(content)
+        return text
+    return str(content)
