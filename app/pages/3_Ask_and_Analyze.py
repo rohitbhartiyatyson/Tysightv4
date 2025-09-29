@@ -6,6 +6,17 @@ st.title('Streamlit App Output')
 
 st.title('Ask & Analyze')
 
+# Setup a lightweight logger for debug entries when TEST_MODE=1 or session_state.debug
+import logging
+logger = logging.getLogger('ask_and_analyze')
+if not logger.handlers:
+    Path('logs').mkdir(exist_ok=True)
+    handler = logging.FileHandler('logs/ask_and_analyze_debug.log')
+    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.setLevel(logging.DEBUG)
+
 # initialize session state for SQL result and filters
 if 'sql_query' not in st.session_state:
     st.session_state.sql_query = ''
@@ -122,7 +133,8 @@ if selected_kind:
                 try:
                     import logging
                     logger = logging.getLogger('ask_and_analyze')
-                    logger.debug(f"{key} options={values_list} before=None forced_default={default_forced}")
+                    if os.environ.get('TEST_MODE')=='1' or st.session_state.get('debug'):
+                        logger.debug(f"{key} options={values_list} before=None forced_default={default_forced}")
                 except Exception:
                     pass
             else:
@@ -137,20 +149,23 @@ if selected_kind:
                         try:
                             import logging
                             logger = logging.getLogger('ask_and_analyze')
-                            logger.debug(f"{key} options={values_list} before={current_val} forced_default={default_forced}")
+                            if os.environ.get('TEST_MODE')=='1' or st.session_state.get('debug'):
+                        logger.debug(f"{key} options={values_list} before={current_val} forced_default={default_forced}")
                         except Exception:
                             pass
                     else:
                         try:
                             import logging
                             logger = logging.getLogger('ask_and_analyze')
-                            logger.debug(f"{key} options={values_list} before={current_val} forced_default=False (already init for this kind)")
+                            if os.environ.get('TEST_MODE')=='1' or st.session_state.get('debug'):
+                        logger.debug(f"{key} options={values_list} before={current_val} forced_default=False (already init for this kind)")
                         except Exception:
                             pass
                 else:
                     try:
                         import logging
                         logger = logging.getLogger('ask_and_analyze')
+                        if os.environ.get('TEST_MODE')=='1' or st.session_state.get('debug'):
                         logger.debug(f"{key} options={values_list} before={current_val} forced_default=False")
                     except Exception:
                         pass
