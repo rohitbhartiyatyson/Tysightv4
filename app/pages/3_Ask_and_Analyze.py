@@ -4,9 +4,11 @@ import json
 
 st.title('Ask & Analyze')
 
-# initialize session state for SQL result
+# initialize session state for SQL result and filters
 if 'sql_query' not in st.session_state:
     st.session_state.sql_query = ''
+if 'filters_by_kind' not in st.session_state:
+    st.session_state['filters_by_kind'] = {}
 
 # List available kinds
 kinds_dir = os.path.join('domain','catalog','kinds')
@@ -16,7 +18,11 @@ if os.path.exists(kinds_dir):
         if os.path.isdir(os.path.join(kinds_dir,p)):
             kind_options.append(p)
 
-selected_kind = st.selectbox('Select a Kind', options=[''] + kind_options, index=0)
+# Use session_state key so we can react to kind changes predictably
+selected_kind = st.selectbox('Select a Kind', options=[''] + kind_options, index=0, key='selected_kind')
+
+# ensure selected_kind variable reflects session state
+selected_kind = st.session_state.get('selected_kind', '')
 
 profile = {}
 if selected_kind:
@@ -50,12 +56,26 @@ if selected_kind:
 
         for col, info in sorted(profile.items(), key=order_key):
             values = info['values'] if isinstance(info, dict) else info
+            values_list = list(values) if values is not None else []
             # include the selected_kind in the key so changing kinds creates fresh widgets
             key = f"filter_{selected_kind}_{col}"
-            # ensure the first option is selected by default
-            val = st.selectbox(f"Filter by {col}", options=[''] + list(values), key=key, index=0)
-            if val:
-                selected_filters_ui[col] = val
+
+            # initialize session_state for this widget to the first value when kind first seen
+            if selected_kind not in st.session_state['filters_by_kind']:
+                st.session_state['filters_by_kind'][selected_kind] = {}
+            if key not in st.session_state:
+                default_val = values_list[0] if values_list else ''
+                st.session_state[key] = default_val
+                st.session_state['filters_by_kind'][selected_kind][col] = default_val
+
+            # Render selectbox tied to session_state key so the selected value is persistent
+            val = st.selectbox(f"Filter by {col}", options=values_list, key=key)
+            # keep the filters_by_kind mirror up to date
+            st.session_state['filters_by_kind'].setdefault(selected_kind, {})
+            st.session_state['filters_by_kind'][selected_kind][col] = st.session_state.get(key)
+
+            if st.session_state.get(key):
+                selected_filters_ui[col] = st.session_state.get(key)
 
 # Question input
 question = st.text_area('Type your question')
