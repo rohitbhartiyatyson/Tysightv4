@@ -44,3 +44,38 @@ def test_agent_flow(monkeypatch):
 
     # Ensure the final result contains the summary text we provided
     assert "Jimmy Dean saw a 10% increase in dollar sales" in result
+
+
+def test_agent_direct_sql_path(monkeypatch):
+    # Simulate a simple question where the intent recognizer returns direct_sql_query
+    import litellm
+
+    # intent tool returns direct_sql_query
+    tool_outputs = [
+        json.dumps({"intent": "direct_sql_query", "entities": {}}),
+        json.dumps({"sql": "SELECT dollar_sales FROM data WHERE brand='Jimmy Dean' LIMIT 10"}),
+        "Summary text",
+    ]
+
+    def fake_completion(*args, **kwargs):
+        return tool_outputs.pop(0)
+
+    monkeypatch.setattr(litellm, 'completion', fake_completion)
+
+    # spy on metric_selection_tool to ensure it is NOT called
+    from insight_agent import tools
+
+    called = {'metrics': False}
+
+    orig_metric = tools.metric_selection_tool.func
+
+    def fake_metric(intent):
+        called['metrics'] = True
+        return orig_metric(intent)
+
+    monkeypatch.setattr(tools.metric_selection_tool, 'func', fake_metric)
+
+    executor = build_agent()
+    out = executor.invoke({"input": "SELECT dollar_sales FROM data WHERE brand='Jimmy Dean'", "kind": "NIQ POS", "filters": {}})
+    # metric selection should not have been called
+    assert not called['metrics']
