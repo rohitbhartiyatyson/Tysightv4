@@ -36,11 +36,21 @@ def _canonical_style(name: str) -> str:
 
 def normalize_sql(sql: str, kind: str) -> str:
     # Harden: reject CTEs and subqueries to avoid unsafe SQL patterns
-    if 'WITH ' in sql.upper():
-        raise ValueError('CTE usage is disallowed in user SQL')
-    if '(' in sql and 'SELECT ' in sql.upper():
-        # basic subquery detection
-        raise ValueError('Subqueries are disallowed in user SQL')
+    # Disallow CTEs that start the query (after whitespace/comments)
+    sql_stripped = sql.lstrip()
+    # strip leading SQL comments (single-line -- and /* */ blocks)
+    sql_stripped = re.sub(r"^(/\*.*?\*/\s*)+", "", sql_stripped, flags=re.DOTALL)
+    sql_stripped = re.sub(r"^(--.*\n\s*)+", "", sql_stripped)
+    if re.match(r"(?i)^WITH\b", sql_stripped):
+        raise ValueError('DISALLOWED_CTE')
+
+    # Detect FROM (SELECT ...) or EXISTS (SELECT ...) patterns (case-insensitive)
+    # Allow normal parentheses used in function calls like SUM(x) or ORDER BY (...) or LIMIT clauses
+    if re.search(r"(?i)FROM\s*\(\s*SELECT\b", sql):
+        raise ValueError('DISALLOWED_SUBQUERY')
+    if re.search(r"(?i)EXISTS\s*\(\s*SELECT\b", sql):
+        raise ValueError('DISALLOWED_SUBQUERY')
+
     """Normalize SQL to enforce canonical naming style and symmetric LOWER() on string comparisons.
 
     - canonicalizes known column names to snake_case lowercase
