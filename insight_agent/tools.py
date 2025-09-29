@@ -93,25 +93,67 @@ def sql_generation_tool(input_data) -> str:
             filters_text = 'No filters selected.'
 
         # Build a constrained prompt that explicitly provides the metrics list and strict rules
-        prompt = f"""You are a SQL generator. Your only job is to write a single SQL query (no joins) that answers the user's question using the provided METRICS list.
+        # Build two prompt templates (generalist for direct SQL safety net, specialist for analytical intents) and choose by mode
+        generalist_prompt = """GENERALIST SQL GENERATOR (Direct SQL / Safety Net)
 
-INPUTS (do not invent or use any other inputs):
+CONTEXT:
 KIND: {kind}
 SCHEMA: {schema_text}
 FILTERS: {filters_text}
 METRICS: {metrics}
+DIMENSIONS: {dimensions}
 USER_QUESTION: {question}
 
-RULES (CRITICAL):
-1) Use ONLY the canonical_name for all column references. NEVER use original_name or description.
-2) Use ONLY columns from the provided METRICS list for measures. Do NOT include other measure columns.
-3) Do not perform joins. Single table only.
-4) Do not use SELECT *. Explicitly list columns to return.
-5) Ensure the query includes a LIMIT clause (e.g., LIMIT 10) unless an explicit limit is provided in the question.
+INSTRUCTIONS (must follow exactly):
+- You MUST use the canonical_name for all columns.
+- The SELECT clause MUST only contain aggregations (e.g., SUM, AVG) of the columns from the "Metrics to Select" list.
+- If "Dimensions to Group By" are provided, include them in SELECT and in a GROUP BY clause.
+- Build a WHERE clause using all key-value pairs from FILTERS when provided. If none provided, omit the WHERE clause.
+- All WHERE clause comparisons MUST be case-insensitive using LOWER(column) = LOWER('value').
+- The query MUST end with LIMIT 1000.
 
 OUTPUT:
-Respond with EXACTLY one JSON object and nothing else. The object must have a single key 'sql' whose value is the SQL query string. Example: {{"sql": "SELECT dollar_sales FROM data WHERE brand='X' LIMIT 10"}}
+Return EXACTLY one JSON object with key 'sql' and the SQL string as its value. Example: {{"sql": "SELECT SUM(dollar_sales) AS dollar_sales, category FROM data WHERE LOWER(brand)=LOWER('X') GROUP BY category LIMIT 1000"}}
 """
+
+        specialist_prompt = """You are a SQL generator for analytical intents.
+
+CONTEXT:
+KIND: {kind}
+SCHEMA: {schema_text}
+FILTERS: {filters_text}
+METRICS: {metrics}
+DIMENSIONS: {dimensions}
+USER_QUESTION: {question}
+
+RULES (must follow):
+1) Use ONLY canonical_name for all column references.
+2) SELECT clause MUST only contain aggregations (e.g., SUM, AVG) of the columns from the METRICS list.
+3) If Dimensions are provided, include them in SELECT and in a GROUP BY clause.
+4) Do not perform joins. Single table only.
+5) Do not use SELECT *. Explicitly list columns to return.
+6) Build a WHERE clause using FILTERS when provided; comparisons must be case-insensitive using LOWER().
+7) The query MUST end with LIMIT 1000.
+
+OUTPUT:
+Respond with EXACTLY one JSON object with key 'sql'."""
+
+        # choose prompt based on mode
+        mode = input_data.get('mode') or 'specialist'
+        # ensure dimensions is available for formatting
+        dimensions = input_data.get('dimensions') or input_data.get('dims') or []
+        if isinstance(dimensions, list):
+            dimensions_text = ', '.join(dimensions) if dimensions else ''
+        else:
+            dimensions_text = str(dimensions)
+        if mode == 'generalist':
+            prompt = generalist_prompt
+        else:
+            prompt = specialist_prompt
+
+        # format the prompt with current values
+        prompt = prompt.format(kind=kind, schema_text=schema_text, filters_text=filters_text, metrics=metrics, question=question, dimensions=dimensions_text)
+
 
 
     # Call the LLM with the assembled prompt
@@ -203,16 +245,17 @@ def intent_recognition_tool(user_question: str) -> str:
         return json.dumps({"error": "LITELLM_API_KEY not set"})
 
     valid_intents = IntentSchema.names() + ["direct_sql_query"]
-    prompt = f"""You are a classifier. Analyze the user's question and return ONLY a JSON object with two keys:
+    prompt = f"""You are a classifier. Analyze the user's question and return ONLY a JSON object with three keys:
 - intent: one of the valid intent names exactly as listed below (including 'direct_sql_query' for simple SQL requests)
 - entities: a JSON object mapping entity types to values (e.g., brand: "Jimmy Dean")
+- dimensions: a JSON list of canonical column names (strings) to GROUP BY (may be empty)
 
 Valid intents: {valid_intents}
 
 User question:
 {user_question}
 
-If the question is a simple request that can be answered with a single SQL query, choose the intent 'direct_sql_query'. Otherwise, choose one of the specialist intents. Respond only with valid JSON, e.g. {{"intent": "direct_sql_query", "entities": {{}}}} (no explanatory text)."""
+If the question is a simple request that can be answered with a single SQL query, choose the intent 'direct_sql_query'. Also, extract any dimensions (canonical column names) that should be used for GROUP BY into the 'dimensions' list. Respond only with valid JSON, e.g. {{"intent": "direct_sql_query", "entities": {{}}, "dimensions": []}} (no explanatory text)."""
 
     try:
         resp = litellm.completion(
@@ -235,15 +278,20 @@ If the question is a simple request that can be answered with a single SQL query
 
     try:
         parsed = json.loads(content)
+        # ensure dimensions key exists
+        if 'dimensions' not in parsed:
+            parsed['dimensions'] = []
         return json.dumps(parsed)
     except Exception:
         try:
             start = str(content).index('{')
             end = str(content).rindex('}') + 1
             parsed = json.loads(str(content)[start:end])
+            if 'dimensions' not in parsed:
+                parsed['dimensions'] = []
             return json.dumps(parsed)
         except Exception:
-            return json.dumps({"intent": "unknown", "entities": {}})
+            return json.dumps({"intent": "unknown", "entities": {}, "dimensions": []})
 
 
 @tool

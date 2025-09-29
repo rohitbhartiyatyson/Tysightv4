@@ -48,6 +48,7 @@ def build_agent(llm=None):
                 'kind': kind,
                 'filters': inputs.get('filters') or inputs.get('selected_filters') or {},
                 'metrics': [],
+                'mode': 'generalist',
             }
             sql_text = sql_generation_tool.func(sql_input)
             intermediates.append(('sql', sql_text))
@@ -62,6 +63,7 @@ def build_agent(llm=None):
                 'kind': kind,
                 'filters': inputs.get('filters') or inputs.get('selected_filters') or {},
                 'metrics': metrics,
+                'mode': 'specialist',
             }
             sql_text = sql_generation_tool.func(sql_input)
             intermediates.append(('sql', sql_text))
