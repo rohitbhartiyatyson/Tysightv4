@@ -34,7 +34,11 @@ def test_agent_flow(monkeypatch):
         # return the next pre-defined tool output
         return tool_outputs.pop(0)
 
-    monkeypatch.setattr(litellm, 'completion', fake_completion)
+    # Ensure code path doesn't early-return due to missing API key
+    monkeypatch.setenv('LITELLM_API_KEY', 'dummy')
+    # Patch the exact module paths used by the application
+    monkeypatch.setattr('insight_agent.tools.litellm.completion', fake_completion)
+    monkeypatch.setattr('insight_agent.llm_client.litellm.completion', fake_completion)
 
     executor = build_agent(llm=llm)
 
