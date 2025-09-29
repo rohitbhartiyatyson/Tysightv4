@@ -33,26 +33,16 @@ def test_intent_recognition_tool(monkeypatch):
 
 
 def test_metric_selection_tool_reads_mapping(tmp_path, monkeypatch):
-    # Create a fake kind mapping file under domain/catalog/kinds/mykind/v1/required_mapping.csv
-    base = tmp_path / "domain" / "catalog" / "kinds" / "mykind" / "v1"
-    base.mkdir(parents=True)
-    mapping_file = base / "required_mapping.csv"
-    rows = [
-        ["original_name","canonical_name","type","description","data_type","is_additive"],
-        ["Brand","brand","Product attribution","Brand name","string",""],
-        ["Dollar Sales","dollar_sales","POS measure","Dollar sales","decimal","yes"],
-        ["Unit Sales","unit_sales","POS measure","Unit sales","decimal","yes"],
-    ]
-    with mapping_file.open('w', newline='') as fh:
-        writer = csv.writer(fh)
-        writer.writerows(rows)
+    # The metric_selection_tool should follow the IntentSchema mapping; assert all intents map to expected metrics
+    expected = {
+        'sales_performance': ["dollar_sales", "unit_sales", "volume_sales"],
+        'yoy_performance': ["dollar_sales", "dollar_sales_ya", "unit_sales", "unit_sales_ya", "volume_sales", "volume_sales_ya"],
+        'distribution_summary': ["tdp_ty", "tdp_ya"],
+        'pricing_summary': ["avg_volume_price", "avg_volume_price_ya"],
+        'velocity_summary': ["velocity", "velocity_ya"],
+        'promotion_summary': ["promo_dollar_sales", "promo_dollar_sales_ya"],
+    }
 
-    # Point tools to tmp domain
-    monkeypatch.setenv('DOMAIN_CATALOG_ROOT', str(tmp_path / 'domain' / 'catalog'))
-    # Also tell metric tool which kind to read
-    monkeypatch.setenv('METRIC_KIND', 'mykind')
-
-    metrics = metric_selection_tool.func('performance_summary')
-    # Expect it to return the canonical names for POS measure columns
-    assert 'dollar_sales' in metrics
-    assert 'unit_sales' in metrics
+    for intent, metrics_expected in expected.items():
+        metrics = metric_selection_tool.func(intent)
+        assert metrics == metrics_expected
