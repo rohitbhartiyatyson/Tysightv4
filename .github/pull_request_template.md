@@ -8,6 +8,13 @@
 - [ ] This change requires a documentation update
 
 ---
+- [ ] **Soft Reset performed:** Clear Streamlit cache and hard-refresh the browser. On the server run:
+
+  streamlit cache clear
+  tail -n 200 logs/streamlit_no_pythonpath.log
+
+- [ ] **Debug Panel check:** Open the Streamlit Debug Panel and verify that agent logs show no ModuleNotFoundError and that the agent can be invoked locally.
+
 ### Handoff Documentation Checklist
 *This checklist must be completed for all PRs that modify application logic or architecture.*
 
