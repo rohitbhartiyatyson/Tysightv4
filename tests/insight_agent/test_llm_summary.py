@@ -14,7 +14,8 @@ def test_get_summary_from_df_mock(monkeypatch):
     def fake_completion(*args, **kwargs):
         return MockResp('This is a one-sentence summary.')
 
-    monkeypatch.setattr('litellm.completion', fake_completion)
+    # Patch the exact module path used by the code under test
+    monkeypatch.setattr('insight_agent.llm_client.litellm.completion', fake_completion)
 
     res = get_summary_from_df(df, 'What is the top-level insight?')
     assert 'one-sentence summary' in res or 'This is a one-sentence summary.' in res
