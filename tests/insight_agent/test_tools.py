@@ -26,8 +26,8 @@ def test_intent_recognition_tool(monkeypatch):
             return fake_completion
 
         # Ensure code doesn't early-return and patch module-level litellm used by tools
-            monkeypatch.setenv('LITELLM_API_KEY', 'dummy')
-            monkeypatch.setattr('insight_agent.tools.litellm.completion', make_fake(intent_name))
+        monkeypatch.setenv('LITELLM_API_KEY', 'dummy')
+        monkeypatch.setattr('insight_agent.tools.litellm.completion', make_fake(intent_name))
         out = intent_recognition_tool.func(question)
         parsed = json.loads(out)
         assert parsed["intent"] == intent_name
