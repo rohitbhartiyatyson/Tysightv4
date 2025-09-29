@@ -192,8 +192,11 @@ Respond with EXACTLY one JSON object with key 'sql'."""
     # Post-process SQL to enforce rails: canonicalization, symmetric LOWER, table whitelist, etc.
     try:
         from insight_agent.sql_validator import normalize_sql, validate_sql
-        sql_text = normalize_sql(sql_text, kind)
-        validate_sql(sql_text, kind)
+        kind_local = locals().get('kind', '')
+        # Only attempt normalization/validation when a kind is provided
+        if kind_local:
+            sql_text = normalize_sql(sql_text, kind_local)
+            validate_sql(sql_text, kind_local)
     except Exception:
         # if validation fails, return empty string so caller can handle
         return ''
