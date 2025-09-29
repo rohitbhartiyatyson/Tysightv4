@@ -48,8 +48,11 @@ def sql_generation_tool(prompt: str) -> str:
 
 
 @tool
-def data_synthesis_tool(df_head: str, user_question: str) -> str:
-    """Synthesize a single-sentence summary from a dataframe head string and a user question."""
+def data_synthesis_tool(input_text: str) -> str:
+    """Synthesize a single-sentence summary from a dataframe head string or combined input.
+
+    This tool accepts a single string (to be compatible with LangChain tool string inputs).
+    """
     api_key = os.environ.get('LITELLM_API_KEY')
     api_base = os.environ.get('LITELLM_API_BASE')
     model_name = "gpt-5-mini"
@@ -57,7 +60,9 @@ def data_synthesis_tool(df_head: str, user_question: str) -> str:
     if not api_key:
         return "Error: LITELLM_API_KEY is not set."
 
-    cleaned_question = user_question.splitlines()[-1].strip() if isinstance(user_question, str) else str(user_question)
+    # Treat the provided input_text as the dataframe head for now
+    df_head = input_text
+    cleaned_question = ""  # optional
     prompt = f"""Given the user's question, '{cleaned_question}', write a single, concise English sentence that summarizes the main finding in the data below.\n\n\nData:\n{df_head}\n"""
 
     try:
