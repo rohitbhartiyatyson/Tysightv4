@@ -179,15 +179,26 @@ Respond with EXACTLY one JSON object with key 'sql'."""
     # Try to parse JSON and return sql
     try:
         parsed = json.loads(content)
-        return parsed.get('sql', '')
+        sql_text = parsed.get('sql', '')
     except Exception:
         try:
             start = str(content).index('{')
             end = str(content).rindex('}') + 1
             parsed = json.loads(str(content)[start:end])
-            return parsed.get('sql', '')
+            sql_text = parsed.get('sql', '')
         except Exception:
-            return ''
+            sql_text = ''
+
+    # Post-process SQL to enforce rails: canonicalization, symmetric LOWER, table whitelist, etc.
+    try:
+        from insight_agent.sql_validator import normalize_sql, validate_sql
+        sql_text = normalize_sql(sql_text, kind)
+        validate_sql(sql_text, kind)
+    except Exception:
+        # if validation fails, return empty string so caller can handle
+        return ''
+
+    return sql_text
 
 @tool
 def data_synthesis_tool(input_text: str) -> str:
