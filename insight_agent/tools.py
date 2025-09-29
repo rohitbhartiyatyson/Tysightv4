@@ -113,7 +113,7 @@ INSTRUCTIONS (must follow exactly):
 - The query MUST end with LIMIT 1000.
 
 OUTPUT:
-Return EXACTLY one JSON object with key 'sql' and the SQL string as its value. Example: {"sql": "SELECT SUM(dollar_sales) AS dollar_sales, category FROM data WHERE LOWER(brand)=LOWER('X') GROUP BY category LIMIT 1000"}
+Return EXACTLY one JSON object with key 'sql' and the SQL string as its value. Example: {{"sql": "SELECT SUM(dollar_sales) AS dollar_sales, category FROM data WHERE LOWER(brand)=LOWER('X') GROUP BY category LIMIT 1000"}}
 """
 
         specialist_prompt = """You are a SQL generator for analytical intents.
