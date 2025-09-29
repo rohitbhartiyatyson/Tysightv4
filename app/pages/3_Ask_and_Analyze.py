@@ -22,6 +22,29 @@ if os.path.exists(kinds_dir):
 
 # Use session_state key so we can react to kind changes predictably
 # TEST_MODE: auto-load fixture when env var set
+# TEST_MODE: auto-load fixture when env var set. Prefer tests/fixtures when present.
+    fixtures_dir = os.path.join('tests','fixtures')
+    fixtures_kind_dir = os.path.join(fixtures_dir, 'test_kind')
+    if os.path.exists(fixtures_kind_dir):
+        profile_path = os.path.join(fixtures_kind_dir, 'profile.json')
+        if os.path.exists(profile_path):
+            try:
+                with open(profile_path,'r') as pf:
+                    profile = json.load(pf)
+                    st.session_state['selected_kind'] = 'test_kind'
+                    selected_kind = 'test_kind'
+                    print(f"[TEST_MODE] using fixtures from {fixtures_kind_dir}")
+            except Exception:
+                pass
+    else:
+        # fallback to domain catalog datasets for test_kind
+        if 'test_kind' in kind_options and selected_kind == '':
+            try:
+                st.session_state['selected_kind'] = 'test_kind'
+                selected_kind = 'test_kind'
+                print('[test_mode] TEST_MODE=1 detected - preselected test_kind')
+            except Exception:
+                pass
 if os.environ.get('TEST_MODE') == '1':
     # use test_kind fixture located under domain/catalog/kinds/test_kind
     if 'test_kind' in kind_options and selected_kind == '':
