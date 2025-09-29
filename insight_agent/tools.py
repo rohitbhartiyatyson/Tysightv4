@@ -8,6 +8,154 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+@tool
+def sql_generation_tool(input_data) -> str:
+    """Generate SQL given a structured input dict containing:
+    {
+        "question": str,
+        "kind": str,
+        "filters": dict,
+        "metrics": list  (optional)
+    }
+
+    This tool will load the kind schema where possible and build a comprehensive
+    prompt including schema, filters, metrics and the user's question before
+    calling the LLM. For backward compatibility, if a string is passed it will
+    be treated as the prompt body directly.
+    """
+    api_key = os.environ.get('LITELLM_API_KEY')
+    api_base = os.environ.get('LITELLM_API_BASE')
+    if not api_key:
+        return "Error: LITELLM_API_KEY is not set. Please create a .env file with your API key."
+
+    # Accept raw prompt strings for backward compatibility
+    if isinstance(input_data, str):
+        prompt = input_data
+    else:
+        # expected a dict-like input
+        question = input_data.get('question') or input_data.get('input') or ''
+        kind = input_data.get('kind') or ''
+        filters = input_data.get('filters') or input_data.get('selected_filters') or {}
+        metrics = input_data.get('metrics') or []
+
+        # Try to load a schema from domain/catalog/kinds/<kind>/v*/mapping_effective.json
+        schema_lines = []
+        if kind:
+            kinds_base = os.path.join('domain', 'catalog', 'kinds')
+            kind_dir = os.path.join(kinds_base, kind)
+            if os.path.exists(kind_dir):
+                # pick the latest v* folder if present
+                try:
+                    versions = [d for d in os.listdir(kind_dir) if os.path.isdir(os.path.join(kind_dir, d))]
+                    versions = sorted(versions)
+                    for v in reversed(versions):
+                        eff = os.path.join(kind_dir, v, 'mapping_effective.json')
+                        if os.path.exists(eff):
+                            try:
+                                with open(eff, 'r') as fh:
+                                    mapping = json.load(fh)
+                                    # mapping_effective.json expected to be a list or dict of mappings
+                                    if isinstance(mapping, dict):
+                                        for k, v in mapping.items():
+                                            schema_lines.append(f"{k}: {v.get('data_type','unknown')}")
+                                    else:
+                                        # fallback when list
+                                        for entry in mapping:
+                                            oname = entry.get('original_name') or entry.get('canonical_name')
+                                            dtype = entry.get('data_type')
+                                            schema_lines.append(f"{oname}: {dtype}")
+                            except Exception:
+                                pass
+                            break
+                except Exception:
+                    # ignore issues listing versions
+                    pass
+
+        # fallback to instance profile schema
+        if not schema_lines and kind:
+            profile_path = os.path.join('domain', 'catalog', 'datasets', kind, 'profile.json')
+            if os.path.exists(profile_path):
+                try:
+                    with open(profile_path, 'r') as pf:
+                        prof = json.load(pf)
+                        for col, info in prof.items():
+                            dtype = info.get('observed_type') if isinstance(info, dict) else 'unknown'
+                            schema_lines.append(f"{col}: {dtype}")
+                except Exception:
+                    pass
+
+        schema_text = '\n'.join(schema_lines) if schema_lines else 'No schema available.'
+
+        # Build filters description
+        if filters:
+            filters_text = '\n'.join([f"{k} = {v}" for k, v in filters.items()])
+        else:
+            filters_text = 'No filters selected.'
+
+        # Build a constrained prompt that explicitly provides the metrics list and strict rules
+        # Build two prompt templates (generalist for direct SQL safety net, specialist for analytical intents) and choose by mode
+        generalist_prompt = """GENERALIST SQL GENERATOR (Direct SQL / Safety Net)
+
+CONTEXT:
+KIND: {kind}
+SCHEMA: {schema_text}
+FILTERS: {filters_text}
+METRICS: {metrics}
+DIMENSIONS: {dimensions}
+USER_QUESTION: {question}
+
+INSTRUCTIONS (must follow exactly):
+- You MUST use the canonical_name for all columns.
+- The SELECT clause MUST only contain aggregations (e.g., SUM, AVG) of the columns from the "Metrics to Select" list.
+- If "Dimensions to Group By" are provided, include them in SELECT and in a GROUP BY clause.
+- Build a WHERE clause using all key-value pairs from FILTERS when provided. If none provided, omit the WHERE clause.
+- All WHERE clause comparisons MUST be case-insensitive using LOWER(column) = LOWER('value').
+- The query MUST end with LIMIT 1000.
+
+OUTPUT:
+Return EXACTLY one JSON object with key 'sql' and the SQL string as its value. Example: {{"sql": "SELECT SUM(dollar_sales) AS dollar_sales, category FROM data WHERE LOWER(brand)=LOWER('X') GROUP BY category LIMIT 1000"}}
+"""
+
+        specialist_prompt = """You are a SQL generator for analytical intents.
+
+CONTEXT:
+KIND: {kind}
+SCHEMA: {schema_text}
+FILTERS: {filters_text}
+METRICS: {metrics}
+DIMENSIONS: {dimensions}
+USER_QUESTION: {question}
+
+RULES (must follow):
+1) Use ONLY canonical_name for all column references.
+2) SELECT clause MUST only contain aggregations (e.g., SUM, AVG) of the columns from the METRICS list.
+3) If Dimensions are provided, include them in SELECT and in a GROUP BY clause.
+4) Do not perform joins. Single table only.
+5) Do not use SELECT *. Explicitly list columns to return.
+6) Build a WHERE clause using FILTERS when provided; comparisons must be case-insensitive using LOWER().
+7) The query MUST end with LIMIT 1000.
+
+OUTPUT:
+Respond with EXACTLY one JSON object with key 'sql'."""
+
+        # choose prompt based on mode
+        mode = input_data.get('mode') or 'specialist'
+        # ensure dimensions is available for formatting
+        dimensions = input_data.get('dimensions') or input_data.get('dims') or []
+        if isinstance(dimensions, list):
+            dimensions_text = ', '.join(dimensions) if dimensions else ''
+        else:
+            dimensions_text = str(dimensions)
+        if mode == 'generalist':
+            prompt = generalist_prompt
+        else:
+            prompt = specialist_prompt
+
+        # format the prompt with current values
+        prompt = prompt.format(kind=kind, schema_text=schema_text, filters_text=filters_text, metrics=metrics, question=question, dimensions=dimensions_text)
+
+
+
     # Call the LLM with the assembled prompt
     try:
         resp = litellm.completion(
@@ -23,11 +171,11 @@ load_dotenv()
         except TypeError:
             resp = litellm.completion(prompt)
 
-    # Normalize possible provider response shapes into 'content' variable
+    # Normalize provider response into a 'content' variable
     content = None
     try:
-        # resp may be an object with .choices[0].message.content
         if hasattr(resp, 'choices'):
+            # OpenAI-like response
             try:
                 content = resp.choices[0].message.content
             except Exception:
@@ -38,63 +186,74 @@ load_dotenv()
     except Exception:
         content = None
 
-    # fallback: resp itself may be a string or dict-like
     if content is None:
         content = resp
 
-    # Try to parse JSON and return sql
+    # Attempt to extract SQL from multiple shapes
     sql_text = None
-    # If content is a string, try json.loads
+
+    # 1) If content is a string: try json.loads -> dict['sql']
     if isinstance(content, str):
         try:
             parsed = json.loads(content)
             if isinstance(parsed, dict) and 'sql' in parsed:
                 sql_text = parsed.get('sql')
         except Exception:
-            # try to extract JSON object substring
+            # try to extract a JSON substring
             try:
-                start = str(content).index('{')
-                end = str(content).rindex('}') + 1
-                parsed = json.loads(str(content)[start:end])
+                s = str(content)
+                start = s.index('{')
+                end = s.rindex('}') + 1
+                parsed = json.loads(s[start:end])
                 if isinstance(parsed, dict) and 'sql' in parsed:
                     sql_text = parsed.get('sql')
             except Exception:
-                sql_text = None
+                # fallback: content might already be raw SQL
+                if 'SELECT' in content.upper():
+                    sql_text = content
 
-    # If content is a dict-like
+    # 2) If content is a dict-like
     if sql_text is None and isinstance(content, dict):
-        sql_text = content.get('sql')
+        if 'sql' in content and isinstance(content.get('sql'), str):
+            sql_text = content.get('sql')
+        else:
+            # common nested paths
+            for key in ('content', 'text', 'message'):
+                val = content.get(key)
+                if isinstance(val, str) and 'SELECT' in val.upper():
+                    sql_text = val
+                    break
 
-    # If content is a provider object not caught above, try common paths
+    # 3) If content is an object, attempt common attributes
     if sql_text is None and hasattr(content, '__dict__'):
         d = getattr(content, '__dict__', {})
-        # attempt common keys
+        # look for direct sql, content or text
         for key in ('sql', 'content', 'text'):
-            if key in d and isinstance(d[key], str):
-                # if it's JSON string, try parse
+            v = d.get(key)
+            if isinstance(v, str):
+                # try parse JSON inside
                 try:
-                    parsed = json.loads(d[key])
+                    parsed = json.loads(v)
                     if isinstance(parsed, dict) and 'sql' in parsed:
                         sql_text = parsed.get('sql')
                         break
                 except Exception:
-                    sql_text = d[key]
-                    break
+                    if 'SELECT' in v.upper():
+                        sql_text = v
+                        break
 
-    # Final safety: never return empty string. If no sql_text found, return an error description
+    # Never return an empty string; return structured error if no SQL found
     if not sql_text:
         return json.dumps({"error": "NO_SQL_RETURNED", "raw": str(content)})
 
-    # Post-process SQL to enforce rails: canonicalization, symmetric LOWER, table whitelist, etc.
+    # Post-process SQL (only validate if kind provided)
     try:
         from insight_agent.sql_validator import normalize_sql, validate_sql
-        # skip validation if kind missing
-        kind = kind if 'kind' in locals() else ''
-        sql_text = normalize_sql(sql_text, kind) if kind else sql_text
-        if kind:
-            validate_sql(sql_text, kind)
+        kind_local = locals().get('kind', '')
+        if kind_local:
+            sql_text = normalize_sql(sql_text, kind_local)
+            validate_sql(sql_text, kind_local)
     except Exception as e:
-        # return structured error rather than an empty string
         return json.dumps({"error": "VALIDATION_FAILED", "message": str(e)})
 
     return sql_text
