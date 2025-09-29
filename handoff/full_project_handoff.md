@@ -78,7 +78,12 @@ These are the critical "do's and don'ts" we have learned. They are the ground ru
 * **Problem: Stubborn "Silent Failures" in Streamlit**
     * **Cause**: Corrupted or irreversibly cached agent execution environment.
     * **Solution Hierarchy**:
-        * **Level 1 (Soft Reset)**: `streamlit cache clear` + a browser hard refresh.
+        * **Level 1 (Soft Reset)**: `streamlit cache clear` + a browser hard refresh. On the server, collect a one-shot tail of the primary log:
+
+            streamlit cache clear
+            tail -n 200 logs/streamlit_no_pythonpath.log
+
+            This helps capture recent startup/import errors for quick diagnosis.
         * **Level 2 (Code Verification)**: `cat <filename>` to prove the code on disk is what we expect.
         * **Level 3 (Backend Isolation)**: Run a temporary `debug_test.py` script to call backend functions directly, bypassing Streamlit.
         * **Level 4 (Hard Reset)**: `sudo rm -rf <project_dir>` and have the agent re-clone the specific PR branch from GitHub.
