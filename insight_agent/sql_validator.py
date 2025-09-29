@@ -35,6 +35,12 @@ def _canonical_style(name: str) -> str:
 
 
 def normalize_sql(sql: str, kind: str) -> str:
+    # Harden: reject CTEs and subqueries to avoid unsafe SQL patterns
+    if 'WITH ' in sql.upper():
+        raise ValueError('CTE usage is disallowed in user SQL')
+    if '(' in sql and 'SELECT ' in sql.upper():
+        # basic subquery detection
+        raise ValueError('Subqueries are disallowed in user SQL')
     """Normalize SQL to enforce canonical naming style and symmetric LOWER() on string comparisons.
 
     - canonicalizes known column names to snake_case lowercase
