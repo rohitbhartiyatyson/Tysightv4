@@ -50,8 +50,15 @@ def build_agent(llm=None):
                 'metrics': [],
                 'mode': 'generalist',
             }
-            sql_text = sql_generation_tool.func(sql_input)
-            intermediates.append(('sql', sql_text))
+            sql_result = sql_generation_tool.func(sql_input)
+            # enforce contract: tool returns plain SQL string on success, or dict with error
+            if isinstance(sql_result, dict) and 'error' in sql_result:
+                intermediates.append(('error', sql_result))
+                # do not proceed to execute
+                return {'final_answer': 'Could not generate SQL', 'intermediate_steps': intermediates}
+            else:
+                sql_text = sql_result
+                intermediates.append(('sql', sql_text))
         else:
             # 2a) Metric selection (code tool)
             metrics = metric_selection_tool.func(intent)
@@ -65,8 +72,13 @@ def build_agent(llm=None):
                 'metrics': metrics,
                 'mode': 'specialist',
             }
-            sql_text = sql_generation_tool.func(sql_input)
-            intermediates.append(('sql', sql_text))
+            sql_result = sql_generation_tool.func(sql_input)
+            if isinstance(sql_result, dict) and 'error' in sql_result:
+                intermediates.append(('error', sql_result))
+                return {'final_answer': 'Could not generate SQL', 'intermediate_steps': intermediates}
+            else:
+                sql_text = sql_result
+                intermediates.append(('sql', sql_text))
 
         # 4) Execute SQL against DuckDB (using existing executor)
         df = pd.DataFrame()
