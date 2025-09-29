@@ -2,6 +2,8 @@ import streamlit as st
 import os
 import json
 
+st.title('Streamlit App Output')
+
 st.title('Ask & Analyze')
 
 # initialize session state for SQL result and filters
