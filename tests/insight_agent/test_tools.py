@@ -22,7 +22,7 @@ def test_intent_recognition_tool(monkeypatch):
     for intent_name, question in examples.items():
         def make_fake(intent_name):
             def fake_completion(*args, **kwargs):
-                return json.dumps({"intent": intent_name, "entities": {"brand": "Jimmy Dean"}})
+                return json.dumps({"intent": intent_name, "entities": {"brand": "Jimmy Dean"}, "dimensions": ["category"]})
             return fake_completion
 
         monkeypatch.setattr(litellm, 'completion', make_fake(intent_name))
@@ -30,6 +30,7 @@ def test_intent_recognition_tool(monkeypatch):
         parsed = json.loads(out)
         assert parsed["intent"] == intent_name
         assert parsed["entities"]["brand"] == "Jimmy Dean"
+        assert parsed.get('dimensions') == ["category"]
 
 
 def test_metric_selection_tool_reads_mapping(tmp_path, monkeypatch):
