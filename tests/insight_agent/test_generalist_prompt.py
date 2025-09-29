@@ -8,7 +8,9 @@ def test_generalist_prompt_monkeypatch(monkeypatch):
     def fake_completion(*args, **kwargs):
         return json.dumps({"sql": "SELECT SUM(dollar_sales) AS dollar_sales FROM data WHERE LOWER(brand)=LOWER('Jimmy Dean') LIMIT 1000"})
 
-    monkeypatch.setattr(litellm, 'completion', fake_completion)
+    # Prevent early exit due to missing API key and patch the exact module paths
+    monkeypatch.setenv('LITELLM_API_KEY', 'dummy')
+    monkeypatch.setattr('insight_agent.tools.litellm.completion', fake_completion)
 
     input_data = {
         'question': 'Give me total sales for Jimmy Dean',

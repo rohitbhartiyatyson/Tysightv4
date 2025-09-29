@@ -1,0 +1,25 @@
+{
+  "a": {
+    "values": [
+      "prod1",
+      "Prod2"
+    ],
+    "filter_display_order": 1
+  },
+  "str_col": {
+    "values": [
+      "x",
+      "y",
+      "z"
+    ],
+    "filter_display_order": 2
+  },
+  "date_col": {
+    "values": [
+      "2025-01-01",
+      "2025-01-02",
+      "2025-01-03"
+    ],
+    "filter_display_order": 3
+  }
+}
