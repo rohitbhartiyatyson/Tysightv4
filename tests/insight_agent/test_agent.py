@@ -39,7 +39,7 @@ def test_agent_flow(monkeypatch):
     executor = build_agent(llm=llm)
 
     # Call the agent with a sample question using invoke
-    out = executor.invoke({"input": "how did jimmy dean perform?"})
+    out = executor.invoke({"input": "how did jimmy dean perform?", "kind": "NIQ POS", "filters": {"brand": "Jimmy Dean"}})
     result = json.dumps(out)
 
     # Ensure the final result contains the summary text we provided
