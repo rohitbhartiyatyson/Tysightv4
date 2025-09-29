@@ -72,7 +72,7 @@ def normalize_sql(sql: str, kind: str) -> str:
 
     # Ensure symmetric LOWER for comparisons against string literals
     # Pattern: <identifier> = LOWER('value')  -> LOWER(<identifier>) = LOWER('value')
-    sql = re.sub(r"\b([A-Za-z_][A-Za-z0-9_]*)\b\s*=\s*LOWER\((['\"]).*?\2\)", r"LOWER(\1) = LOWER(\2\3\2)", sql)
+    # use capture-based replacement below to safely handle quoting and content
 
     # Better approach: handle various quoting of literal, but do a simpler transform:
     def _sym_lower(match):
