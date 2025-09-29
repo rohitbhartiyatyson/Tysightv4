@@ -93,6 +93,7 @@ def sql_generation_tool(input_data) -> str:
             filters_text = 'No filters selected.'
 
         prompt = f"""You are a SQL generator. Build a single SQL query (no joins) that answers the user's question.
+CRITICAL RULE: In the generated SQL, you must use the canonical_name for all column references. You must never use the original_name or description.
 Include only mapped & present columns. Enforce LIMIT and no SELECT *.
 
 Kind: {kind}
