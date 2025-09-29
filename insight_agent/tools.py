@@ -242,9 +242,10 @@ Respond with EXACTLY one JSON object with key 'sql'."""
                         sql_text = v
                         break
 
-    # Never return an empty string; return structured error if no SQL found
+    # Never return an empty string here. Instead return structured result via tuple-like dict.
+    # The tool MUST return a plain SQL string on success. On failure, return a dict with an 'error' key.
     if not sql_text:
-        return json.dumps({"error": "NO_SQL_RETURNED", "raw": str(content)})
+        return {"error": "NO_SQL_RETURNED", "raw": str(content)}
 
     # Post-process SQL (only validate if kind provided)
     try:
@@ -254,7 +255,7 @@ Respond with EXACTLY one JSON object with key 'sql'."""
             sql_text = normalize_sql(sql_text, kind_local)
             validate_sql(sql_text, kind_local)
     except Exception as e:
-        return json.dumps({"error": "VALIDATION_FAILED", "message": str(e)})
+        return {"error": "VALIDATION_FAILED", "message": str(e)}
 
     return sql_text
 
