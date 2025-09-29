@@ -33,19 +33,32 @@ def build_agent(llm=None):
 
         intent = parsed_intent.get('intent') if isinstance(parsed_intent, dict) else str(parsed_intent)
 
-        # 2) Metric selection (code tool)
-        metrics = metric_selection_tool.func(intent)
-        intermediates.append(('metrics', metrics))
+        # 2) Branching logic: if intent indicates a direct SQL request, bypass metric selection
+        if intent == 'direct_sql_query':
+            intermediates.append(('branch', 'direct_sql'))
+            # Directly ask the SQL generator to build SQL for the question
+            sql_input = {
+                'question': question,
+                'kind': kind,
+                'filters': inputs.get('filters') or inputs.get('selected_filters') or {},
+                'metrics': [],
+            }
+            sql_text = sql_generation_tool.func(sql_input)
+            intermediates.append(('sql', sql_text))
+        else:
+            # 2a) Metric selection (code tool)
+            metrics = metric_selection_tool.func(intent)
+            intermediates.append(('metrics', metrics))
 
-        # 3) SQL generation
-        sql_input = {
-            'question': question,
-            'kind': kind,
-            'filters': inputs.get('filters') or inputs.get('selected_filters') or {},
-            'metrics': metrics,
-        }
-        sql_text = sql_generation_tool.func(sql_input)
-        intermediates.append(('sql', sql_text))
+            # 3) SQL generation
+            sql_input = {
+                'question': question,
+                'kind': kind,
+                'filters': inputs.get('filters') or inputs.get('selected_filters') or {},
+                'metrics': metrics,
+            }
+            sql_text = sql_generation_tool.func(sql_input)
+            intermediates.append(('sql', sql_text))
 
         # 4) Execute SQL against DuckDB (using existing executor)
         df = pd.DataFrame()
