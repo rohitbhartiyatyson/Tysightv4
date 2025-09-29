@@ -13,4 +13,6 @@ def test_get_sql_from_prompt_monkeypatch(monkeypatch):
     monkeypatch.setattr('insight_agent.tools.litellm.completion', fake_completion)
 
     sql = sql_generation_tool.func('irrelevant')
+    # tool should return plain SQL string when successful
+    assert isinstance(sql, str)
     assert "SELECT * FROM data" in sql
