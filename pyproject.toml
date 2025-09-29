@@ -18,7 +18,9 @@ dependencies = [
   "streamlit>=1.0",
   "litellm>=0.0.1",
   "python-dotenv>=1.0",
-  "duckdb>=0.8"
+  "duckdb>=0.8",
+  "langchain>=0.0.300",
+  "langchain-community>=0.0.10"
 ]
 
 [project.urls]

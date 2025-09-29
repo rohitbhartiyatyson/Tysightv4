@@ -2,11 +2,15 @@ import streamlit as st
 import os
 import json
 
+st.title('Streamlit App Output')
+
 st.title('Ask & Analyze')
 
-# initialize session state for SQL result
+# initialize session state for SQL result and filters
 if 'sql_query' not in st.session_state:
     st.session_state.sql_query = ''
+if 'filters_by_kind' not in st.session_state:
+    st.session_state['filters_by_kind'] = {}
 
 # List available kinds
 kinds_dir = os.path.join('domain','catalog','kinds')
@@ -16,7 +20,11 @@ if os.path.exists(kinds_dir):
         if os.path.isdir(os.path.join(kinds_dir,p)):
             kind_options.append(p)
 
-selected_kind = st.selectbox('Select a Kind', options=[''] + kind_options)
+# Use session_state key so we can react to kind changes predictably
+selected_kind = st.selectbox('Select a Kind', options=[''] + kind_options, index=0, key='selected_kind')
+
+# ensure selected_kind variable reflects session state
+selected_kind = st.session_state.get('selected_kind', '')
 
 profile = {}
 if selected_kind:
@@ -50,10 +58,26 @@ if selected_kind:
 
         for col, info in sorted(profile.items(), key=order_key):
             values = info['values'] if isinstance(info, dict) else info
-            key = f"filter_{col}"
-            val = st.selectbox(f"Filter by {col}", options=[''] + list(values), key=key)
-            if val:
-                selected_filters_ui[col] = val
+            values_list = list(values) if values is not None else []
+            # include the selected_kind in the key so changing kinds creates fresh widgets
+            key = f"filter_{selected_kind}_{col}"
+
+            # initialize session_state for this widget to the first value when kind first seen
+            if selected_kind not in st.session_state['filters_by_kind']:
+                st.session_state['filters_by_kind'][selected_kind] = {}
+            if key not in st.session_state:
+                default_val = values_list[0] if values_list else ''
+                st.session_state[key] = default_val
+                st.session_state['filters_by_kind'][selected_kind][col] = default_val
+
+            # Render selectbox tied to session_state key so the selected value is persistent
+            val = st.selectbox(f"Filter by {col}", options=values_list, key=key)
+            # keep the filters_by_kind mirror up to date
+            st.session_state['filters_by_kind'].setdefault(selected_kind, {})
+            st.session_state['filters_by_kind'][selected_kind][col] = st.session_state.get(key)
+
+            if st.session_state.get(key):
+                selected_filters_ui[col] = st.session_state.get(key)
 
 # Question input
 question = st.text_area('Type your question')
@@ -69,48 +93,62 @@ if st.button('Ask'):
     print(f"[ui] user_question={question}")
     print(f"[ui] selected_filters={selected_filters}")
 
-    # Use new backend processor that returns evidence pieces
-    from insight_agent.llm_client import process_question
-    evidence = process_question(selected_kind, question, selected_filters)
+    # Build or get the LangChain agent executor and call it with the user's question
+    from insight_agent.agent import build_agent
 
-    # Show SQL prompt and result summary
-    st.markdown('**Generated SQL Prompt:**')
-    st.code(evidence.get('sql_prompt',''))
-    st.session_state.sql_query = ''
+    try:
+        executor = build_agent()
+        # enable verbose tracing on the executor when possible
+        try:
+            setattr(executor, 'verbose', True)
+        except Exception:
+            pass
+        # pass selected_kind into the agent input so it can locate the correct dataset
+        agent_response = executor.invoke({"input": question, "kind": selected_kind})
+        # print full agent response for debugging (includes intermediate_steps)
+        print("[agent_response]", agent_response)
+    except Exception as e:
+        st.error(f"Agent execution failed: {e}")
+        agent_response = {"error": str(e)}
+
+    # Determine final answer text
+    final_answer = None
+    if isinstance(agent_response, dict):
+        final_answer = agent_response.get('output') or agent_response.get('final_answer') or agent_response.get('result') or agent_response.get('text') or json.dumps(agent_response)
+    else:
+        final_answer = str(agent_response)
 
     # Display summary
-    if evidence.get('summary_raw'):
-        st.markdown('**Summary:**')
-        st.markdown(evidence.get('summary_raw'))
+    st.markdown('**Summary:**')
+    # Render the final answer as markdown to preserve wrapping and formatting
+    try:
+        st.markdown(final_answer)
+    except Exception:
+        st.write(final_answer)
 
-    st.markdown('**Query Results:**')
-    st.dataframe(evidence.get('dataframe', None))
-
-    # Add Evidence expander (5 parts)
+    # Display agent evidence (chain of thought / intermediate steps)
     with st.expander('Show Evidence'):
-        # 1) Full prompt sent to SQL LLM
-        with st.expander('1. SQL Prompt'):
-            st.code(evidence.get('sql_prompt',''))
+        st.markdown('**Full Agent Response (raw):**')
+        try:
+            st.json(agent_response)
+        except Exception:
+            st.write(agent_response)
 
-        # 2) Raw JSON response from SQL LLM
-        with st.expander('2. SQL Raw Response'):
-            st.code(evidence.get('sql_raw_response',''))
-
-        # 3) Complete DataFrame result
-        with st.expander('3. DataFrame Result'):
-            df_full = evidence.get('dataframe')
-            if df_full is not None:
-                st.dataframe(df_full)
-            else:
-                st.write('No data')
-
-        # 4) Full prompt sent to Summary LLM
-        with st.expander('4. Summary Prompt'):
-            st.code(evidence.get('summary_prompt',''))
-
-        # 5) Raw text response from Summary LLM
-        with st.expander('5. Summary Raw Response'):
-            st.code(evidence.get('summary_raw',''))
+        # If the executor returned structured intermediate steps, display them nicely
+        if isinstance(agent_response, dict):
+            intermediates = agent_response.get('intermediate_steps') or agent_response.get('intermediates') or []
+            if intermediates:
+                st.markdown('**Intermediate Steps:**')
+                for i, step in enumerate(intermediates):
+                    # Each step may be a tuple (AgentAction, observation) when returned; render safely
+                    try:
+                        action, observation = step
+                        st.write(f"Step {i+1} - Action: {getattr(action, 'tool', str(action))}")
+                        st.write(f"Input: {getattr(action, 'tool_input', str(action))}")
+                        st.write(f"Observation: {observation}")
+                        st.write('---')
+                    except Exception:
+                        st.write(step)
 
 # If a SQL query has been stored in session state, display it
 if st.session_state.sql_query:
