@@ -69,48 +69,50 @@ if st.button('Ask'):
     print(f"[ui] user_question={question}")
     print(f"[ui] selected_filters={selected_filters}")
 
-    # Use new backend processor that returns evidence pieces
-    from insight_agent.llm_client import process_question
-    evidence = process_question(selected_kind, question, selected_filters)
+    # Build or get the LangChain agent executor and call it with the user's question
+    from insight_agent.agent import build_agent
 
-    # Show SQL prompt and result summary
-    st.markdown('**Generated SQL Prompt:**')
-    st.code(evidence.get('sql_prompt',''))
-    st.session_state.sql_query = ''
+    try:
+        executor = build_agent()
+        agent_response = executor.invoke({"input": question})
+    except Exception as e:
+        st.error(f"Agent execution failed: {e}")
+        agent_response = {"error": str(e)}
+
+    # Determine final answer text
+    final_answer = None
+    if isinstance(agent_response, dict):
+        final_answer = agent_response.get('output') or agent_response.get('final_answer') or agent_response.get('result') or agent_response.get('text') or json.dumps(agent_response)
+    else:
+        final_answer = str(agent_response)
 
     # Display summary
-    if evidence.get('summary_raw'):
-        st.markdown('**Summary:**')
-        st.markdown(evidence.get('summary_raw'))
+    st.markdown('**Summary:**')
+    st.markdown(final_answer)
 
-    st.markdown('**Query Results:**')
-    st.dataframe(evidence.get('dataframe', None))
-
-    # Add Evidence expander (5 parts)
+    # Display agent evidence (chain of thought / intermediate steps)
     with st.expander('Show Evidence'):
-        # 1) Full prompt sent to SQL LLM
-        with st.expander('1. SQL Prompt'):
-            st.code(evidence.get('sql_prompt',''))
+        st.markdown('**Full Agent Response (raw):**')
+        try:
+            st.json(agent_response)
+        except Exception:
+            st.write(agent_response)
 
-        # 2) Raw JSON response from SQL LLM
-        with st.expander('2. SQL Raw Response'):
-            st.code(evidence.get('sql_raw_response',''))
-
-        # 3) Complete DataFrame result
-        with st.expander('3. DataFrame Result'):
-            df_full = evidence.get('dataframe')
-            if df_full is not None:
-                st.dataframe(df_full)
-            else:
-                st.write('No data')
-
-        # 4) Full prompt sent to Summary LLM
-        with st.expander('4. Summary Prompt'):
-            st.code(evidence.get('summary_prompt',''))
-
-        # 5) Raw text response from Summary LLM
-        with st.expander('5. Summary Raw Response'):
-            st.code(evidence.get('summary_raw',''))
+        # If the executor returned structured intermediate steps, display them nicely
+        if isinstance(agent_response, dict):
+            intermediates = agent_response.get('intermediate_steps') or agent_response.get('intermediates') or []
+            if intermediates:
+                st.markdown('**Intermediate Steps:**')
+                for i, step in enumerate(intermediates):
+                    # Each step may be a tuple (AgentAction, observation) when returned; render safely
+                    try:
+                        action, observation = step
+                        st.write(f"Step {i+1} - Action: {getattr(action, 'tool', str(action))}")
+                        st.write(f"Input: {getattr(action, 'tool_input', str(action))}")
+                        st.write(f"Observation: {observation}")
+                        st.write('---')
+                    except Exception:
+                        st.write(step)
 
 # If a SQL query has been stored in session state, display it
 if st.session_state.sql_query:
