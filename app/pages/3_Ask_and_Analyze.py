@@ -21,6 +21,18 @@ if os.path.exists(kinds_dir):
             kind_options.append(p)
 
 # Use session_state key so we can react to kind changes predictably
+# TEST_MODE: auto-load fixture when env var set
+if os.environ.get('TEST_MODE') == '1':
+    # use test_kind fixture located under domain/catalog/kinds/test_kind
+    if 'test_kind' in kind_options and selected_kind == '':
+        try:
+            # preselect the test_kind
+            st.session_state['selected_kind'] = 'test_kind'
+            selected_kind = 'test_kind'
+            print('[test_mode] TEST_MODE=1 detected - preselected test_kind')
+        except Exception:
+            pass
+
 selected_kind = st.selectbox('Select a Kind', options=[''] + kind_options, index=0, key='selected_kind')
 
 # ensure selected_kind variable reflects session state
