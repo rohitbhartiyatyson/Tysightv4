@@ -1,10 +1,13 @@
 # Tysightv4: The Complete Handoff Document
 
+
 This document contains the complete context for the Tysightv4 project, including the final V2 Master Spec, the V3 Roadmap, and our full Operational Playbook of learnings and best practices.
+
 
 ---
 ## PART 1: THE V2 MASTER SPEC
 This is the authoritative source of truth for the Tysightv4 application, Version 2.
+
 
 ### 1. V2 Product Scope
 **Goal**: A modular Streamlit app that onboards single datasets and answers natural language questions using a robust, multi-tool AI agent. The agent has two reasoning paths: a "Specialist" path for complex, predefined analytical questions (e.g., YoY performance) and a "Generalist" safety-net path for simple, ad-hoc SQL queries.
@@ -32,10 +35,6 @@ The application's logic is orchestrated by an AI agent built with LangChain.
 * **Column `data_type` Vocabulary**: `string`, `integer`, `decimal`, `date`, `datetime`.
 
 
-#### The Reasoning Paths
-1.  **Specialist Path**: For known analytical intents, the agent follows the full chain: `Intent -> Metrics -> SQL -> Data -> Summary`.
-2.  **Generalist Path**: For simple, ad-hoc intents (`direct_sql_query`), the agent bypasses the metric selection step: `Intent -> SQL -> Data -> Summary`.
-
 ---
 ## PART 2: THE V3 ROADMAP
 This document outlines the prioritized features for the V3 development phase.
@@ -43,56 +42,56 @@ This document outlines the prioritized features for the V3 development phase.
 
 ### 1. Graphing & Charting Capability
 * **Objective**: Enhance the "Ask & Analyze" page to visualize the results of SQL queries.
-* **Implementation**: Add a new "Chart Generation" tool to the agent that automatically determines the best chart type and generates a visualization.
 
 
 ### 2. Advanced HTML Reports
-* **Objective**: Implement a "Download Report" feature.
-* **Implementation**: Create a tool that bundles the summary text, the data table, and the new chart into a single, downloadable HTML file.
+* **Objective**: Implement a "Download Report" feature that bundles the summary, data table, and chart into a single HTML file.
 
 
 ### 3. Data Harmonization & Joins
-* **Objective**: Evolve the application to support queries across multiple, related datasets.
-* **Implementation**: Design and implement a central "Data Dictionary" for managing globally unique `canonical_name`s to enable `JOIN`s.
+* **Objective**: Evolve the application to support queries across multiple, related datasets by implementing a central "Data Dictionary."
+
 
 ---
 ## PART 3: THE OPERATIONAL PLAYBOOK (OUR LEARNINGS)
 These are the critical "do's and don'ts" we have learned. They are the ground rules for all future development.
 
 
-### 1. The Golden Rule: Test-Driven Development and Granular Steps
-* **Do**: Break every feature down into the smallest possible, verifiable steps.
-* **Don't**: Attempt to build and test multiple new components at once.
-* **Learning**: Our biggest failures came from trying to build the entire agent chain in one go. We became successful when we adopted a test-driven approach, writing specific unit tests for each new tool (`intent`, `metric`, `sql`) before integrating them. **Every new tool must have a unit test before it is used in the main agent chain.**
+### 1. Project Roles & Workflow
+* **The Roles**:
+    * **Product Owner (You)**: Makes all final decisions on features, design, and priorities. Performs all manual tests.
+    * **Orchestrator (Me, Gemini)**: Acts as the architect and project manager. Diagnoses issues, proposes plans, and formulates precise instructions for the agent.
+    * **Implementer (OpenHands)**: Executes specific, small, deterministic tasks.
+* **The Golden Rule: Test-Then-Merge Mandate**: We never merge a pull request into `main` until it has passed both automated tests (CI) and a successful manual test by the Product Owner for any user-facing changes.
 
 
-### 2. The Rule of the "Shared Contract"
-* **Do**: Define a strict, explicit "Shared Contract" (like our `IntentSchema`) that governs the inputs and outputs between different agent tools.
-* **Don't**: Allow one tool to pass a "creative" or unconstrained output to another tool.
-* **Learning**: The agent consistently failed when the `intent_recognition_tool` could invent its own intents. It became reliable only after we forced it to choose from a predefined list that the `metric_selection_tool` was guaranteed to understand.
+### 2. Core Architectural Principles
+* **Data Model is One-to-One**: A "Kind" can only have one data "Instance" at a time. This simplifies the app to a "point-in-time" analysis tool.
+* **Schema Evolution is Manual**: If a Kind's schema changes, it becomes a new version (v2). The user is responsible for re-uploading data to match the new schema.
+* **Filters are Data-Driven**: The user controls UI filters via the `filter_display_order` column in their mapping file.
+* **Secrets and Data are Ignored**: The `.gitignore` file correctly excludes `.env` and all user data in `domain/catalog/`.
 
 
-### 3. The Golden Rule of Prompt Engineering: "Redesign, Don't Patch"
-* **Do**: When an LLM tool is failing, redesign its prompt from the ground up to be simple, clear, and unambiguous. Use structured formats like checklists.
+### 3. The Debugging Playbook
+* **Problem: Stubborn "Silent Failures" in Streamlit**
+    * **Cause**: Corrupted or irreversibly cached agent execution environment.
+    * **Solution Hierarchy**:
+        * **Level 1 (Soft Reset)**: `streamlit cache clear` + a browser hard refresh.
+        * **Level 2 (Code Verification)**: `cat <filename>` to prove the code on disk is what we expect.
+        * **Level 3 (Backend Isolation)**: Run a temporary `debug_test.py` script to call backend functions directly, bypassing Streamlit.
+        * **Level 4 (Hard Reset)**: `sudo rm -rf <project_dir>` and have the agent re-clone the specific PR branch from GitHub.
+* **Problem: Complex API Connection Errors**
+    * **Cause**: Configuration errors (endpoint, payload, model name, etc.).
+    * **Solution**: A methodical, step-by-step diagnostic process using `curl` to test each variable (connectivity, path, payload, model, API key) one at a time.
+
+
+### 4. The Golden Rule of Prompt Engineering: "Redesign, Don't Patch"
+* **Do**: When an LLM tool is failing, redesign its prompt from the ground up to be simple, clear, and unambiguous, using structured formats like checklists.
 * **Don't**: Attempt to fix a failing prompt by adding more and more "patch" instructions.
-* **Learning**: Our `sql_generation_tool` failed repeatedly as we kept adding "CRITICAL RULE" patches to a confusing paragraph. It became reliable only when we replaced the entire prompt with a clean, structured design that separated `CONTEXT` from a simple `INSTRUCTIONS` checklist.
+* **Learning**: Our `sql_generation_tool` became reliable only when we replaced its long paragraph of rules with a clean design that separated `CONTEXT` from a simple `INSTRUCTIONS` checklist.
 
 
-### 4. Our Debugging Hierarchy for UI and Agent Failures
-* **Do**: Follow a methodical process to diagnose bugs, starting with the simplest cause.
-* **Level 1 (UI Glitches)**: Suspect a Streamlit `rerun` issue. Use `st.session_state` to ensure values persist correctly.
-* **Level 2 (Silent Failures)**: Suspect a broken agent chain. Use the "Evidence UI" to find the first tool that produced an incorrect or empty output.
-* **Level 3 (Tool Failures)**: Suspect a bad prompt or faulty logic. Add direct `print()` statements to the tool to see the exact inputs it received and the raw outputs it produced.
-* **Level 4 (Test Failures)**: Suspect an environment issue. Delete `__pycache__` directories or check for duplicate project folders.
-
-
-### 5. Mandatory Workflow Rules
-* **Do**: Run `make smoke-test` after every single code change.
-* **Do**: Run servers in the background (`nohup ... &`) to prevent the agent from hanging.
-* **Do**: Ensure all handoff documents (`master_spec.md`, `new_chat_bundle.md`) are updated at the end of every major feature merge.
-
-
-### 6. The Handoff Documentation Mandate
-* **Do**: After every major feature is merged into `main`, perform a dedicated documentation update to keep this handoff document and its sources (`master_spec.md`, `capsule.md`) accurate.
+### 5. The Handoff Documentation Mandate
+* **Do**: After every major feature is merged to `main`, perform a dedicated documentation update to keep this handoff document and its sources (`master_spec.md`, `capsule.md`) accurate.
 * **Don't**: Assume the documentation is in sync. Stale documentation is a critical bug.
-* **Learning**: Our process requires a formal step to update our human-readable documents, not just our code. We will create a `make handoff-update` command to remind us of this crucial final step in our workflow. **This document must always be a living document.**
+* **Learning**: Our process requires a formal step, `make handoff-update`, to keep our human-readable documents current.
