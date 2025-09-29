@@ -99,6 +99,8 @@ INPUTS (do not invent or use any other inputs):
 KIND: {kind}
 SCHEMA: {schema_text}
 FILTERS: {filters_text}
+
+CRITICAL RULE: You must build a WHERE clause in your query. Use the key-value pairs in the "Filters" input to construct the conditions for the WHERE clause. Apply LOWER() to both the column and the value for all conditions.
 METRICS: {metrics}
 USER_QUESTION: {question}
 
