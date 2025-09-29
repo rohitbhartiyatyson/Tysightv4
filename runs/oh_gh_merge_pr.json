@@ -2,7 +2,7 @@
   "status_code": 200,
   "ok": true,
   "json": {
-    "sha": "70013456648a93a229fe8936806f07f757019080",
+    "sha": "d3de1a28a0e4d5387868f6ce8622e36c542abc66",
     "merged": true,
     "message": "Pull Request successfully merged"
   }
