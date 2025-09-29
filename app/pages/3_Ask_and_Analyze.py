@@ -16,7 +16,7 @@ if os.path.exists(kinds_dir):
         if os.path.isdir(os.path.join(kinds_dir,p)):
             kind_options.append(p)
 
-selected_kind = st.selectbox('Select a Kind', options=[''] + kind_options)
+selected_kind = st.selectbox('Select a Kind', options=[''] + kind_options, index=0)
 
 profile = {}
 if selected_kind:
@@ -51,7 +51,7 @@ if selected_kind:
         for col, info in sorted(profile.items(), key=order_key):
             values = info['values'] if isinstance(info, dict) else info
             key = f"filter_{col}"
-            val = st.selectbox(f"Filter by {col}", options=[''] + list(values), key=key)
+            val = st.selectbox(f"Filter by {col}", options=[''] + list(values), key=key, index=0)
             if val:
                 selected_filters_ui[col] = val
 
