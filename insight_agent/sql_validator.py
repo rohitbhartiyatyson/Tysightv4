@@ -39,11 +39,13 @@ def normalize_sql(sql: str, kind: str) -> str:
     # Reject common CTE usage (WITH ...) at the start of the query
     stripped = sql.lstrip()
     if re.match(r'(?i)^\s*WITH\b', stripped):
-        raise ValueError('CTE usage is disallowed in user SQL')
+        # include machine-readable token for tests
+        raise ValueError('DISALLOWED_CTE: CTE usage is disallowed in user SQL')
 
     # Detect explicit subquery patterns like FROM (SELECT ...) or EXISTS (SELECT ...)
     if re.search(r"(?i)FROM\s*\(\s*SELECT\b", sql) or re.search(r"(?i)EXISTS\s*\(\s*SELECT\b", sql):
-        raise ValueError('Subqueries are disallowed in user SQL')
+        # include machine-readable token for tests
+        raise ValueError('DISALLOWED_SUBQUERY: Subqueries are disallowed in user SQL')
     """Normalize SQL to enforce canonical naming style and symmetric LOWER() on string comparisons.
 
     - canonicalizes known column names to snake_case lowercase
