@@ -26,12 +26,15 @@ jobs:
         run: |
           pytest -q --junitxml=pytest-junit.xml | tee pytest-full.log
       - name: Upload pytest artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: smoke-test-artifacts
+          retention-days: 14
           path: |
             pytest-junit.xml
             pytest-full.log
+            logs/ask_and_analyze_debug.log
 
   e2e:
     runs-on: ubuntu-latest
