@@ -33,44 +33,10 @@ if os.path.exists(kinds_dir):
             kind_options.append(p)
 
 # Use session_state key so we can react to kind changes predictably
-# TEST_MODE: auto-load fixture when env var set
-# TEST_MODE: auto-load fixture when env var set. Prefer tests/fixtures when present.
-    fixtures_dir = os.path.join('tests','fixtures')
-    fixtures_kind_dir = os.path.join(fixtures_dir, 'test_kind')
-    if os.path.exists(fixtures_kind_dir):
-        profile_path = os.path.join(fixtures_kind_dir, 'profile.json')
-        if os.path.exists(profile_path):
-            try:
-                with open(profile_path,'r') as pf:
-                    profile = json.load(pf)
-                    st.session_state['selected_kind'] = 'test_kind'
-                    selected_kind = 'test_kind'
-                    print(f"[TEST_MODE] using fixtures from {fixtures_kind_dir}")
-            except Exception:
-                pass
-    else:
-        # fallback to domain catalog datasets for test_kind
-        if 'test_kind' in kind_options and selected_kind == '':
-            try:
-                st.session_state['selected_kind'] = 'test_kind'
-                selected_kind = 'test_kind'
-                print('[test_mode] TEST_MODE=1 detected - preselected test_kind')
-            except Exception:
-                pass
-if os.environ.get('TEST_MODE') == '1':
-    # use test_kind fixture located under domain/catalog/kinds/test_kind
-    if 'test_kind' in kind_options and selected_kind == '':
-        try:
-            # preselect the test_kind
-            st.session_state['selected_kind'] = 'test_kind'
-            selected_kind = 'test_kind'
-            print('[test_mode] TEST_MODE=1 detected - preselected test_kind')
-        except Exception:
-            pass
-
+# selected_kind should be empty on load; do not auto-select via TEST_MODE or fixtures
 selected_kind = st.selectbox('Select a Kind', options=[''] + kind_options, index=0, key='selected_kind')
 
-# ensure selected_kind variable reflects session state
+# ensure selected_kind variable reflects session state (default empty string)
 selected_kind = st.session_state.get('selected_kind', '')
 
 profile = {}
@@ -116,75 +82,47 @@ if selected_kind:
             if selected_kind not in st.session_state['filters_by_kind']:
                 st.session_state['filters_by_kind'][selected_kind] = {}
 
-            # initializer guard: track last init per filter per kind to avoid repeated forcing
-            last_init_key = f"_init_{selected_kind}_{col}"
-
-            # Decide whether to set a default:
-            # - If widget key missing in session_state -> set default
-            # - If current value not present in new options (kind changed) -> reset once
-            default_forced = False
+            # Remove initializer guard and auto-defaulting. We do not write defaults for filter widgets.
+            # Keep keys stable. If the session_state has an existing value, keep it; otherwise leave it absent/None.
             current_val = st.session_state.get(key, None)
 
-            if key not in st.session_state or current_val is None:
-                # set default only once
-                default_val = values_list[0] if values_list else ''
-                st.session_state[key] = default_val
-                st.session_state['filters_by_kind'][selected_kind][col] = default_val
-                default_forced = True
+            # Remove any per-kind init flags if present
+            last_init_key = f"_init_{selected_kind}_{col}"
+            if last_init_key in st.session_state:
                 try:
-                    import logging
-                    logger = logging.getLogger('ask_and_analyze')
-                    if os.environ.get('TEST_MODE')=='1' or st.session_state.get('debug'):
-                                logger.debug(f"{key} options={values_list} before=None forced_default={default_forced}")
+                    del st.session_state[last_init_key]
                 except Exception:
                     pass
-            else:
-                # current value exists; if it's no longer in options and we haven't re-initialized for this kind, reset
-                if (isinstance(current_val, list) and any(v not in values_list for v in current_val)) or (not isinstance(current_val, list) and current_val not in values_list):
-                    if not st.session_state.get(last_init_key, False):
-                        default_val = values_list[0] if values_list else ''
-                        st.session_state[key] = default_val
-                        st.session_state['filters_by_kind'][selected_kind][col] = default_val
-                        st.session_state[last_init_key] = True
-                        default_forced = True
-                        try:
-                            import logging
-                            logger = logging.getLogger('ask_and_analyze')
-                            if os.environ.get('TEST_MODE')=='1' or st.session_state.get('debug'):
-                                logger.debug(f"{key} options={values_list} before={current_val} forced_default={default_forced}")
-                        except Exception:
-                            pass
-                    else:
-                        try:
-                            import logging
-                            logger = logging.getLogger('ask_and_analyze')
-                            if os.environ.get('TEST_MODE')=='1' or st.session_state.get('debug'):
-                                logger.debug(f"{key} options={values_list} before={current_val} forced_default=False (already init for this kind)")
-                        except Exception:
-                            pass
-                else:
-                    try:
-                        import logging
-                        logger = logging.getLogger('ask_and_analyze')
-                        if os.environ.get('TEST_MODE')=='1' or st.session_state.get('debug'):
-                                logger.debug(f"{key} options={values_list} before={current_val} forced_default=False")
-                    except Exception:
-                        pass
+
+            # Do not auto-set defaults. Keep existing session_state value if present; otherwise leave None/empty.
+            # Logging: only output debug info when TEST_MODE=1 or explicit debug in session_state.
+            try:
+                import logging
+                logger = logging.getLogger('ask_and_analyze')
+                if os.environ.get('TEST_MODE')=='1' or st.session_state.get('debug'):
+                    logger.debug(f"{key} options_count={len(values_list)} before={current_val} forced_default=False")
+            except Exception:
+                pass
 
             # Render widget (multiselect if indicated) tied to session_state key so the selected value is persistent
             is_multi = isinstance(info, dict) and info.get('multiselect', False)
             if is_multi:
-                # ensure state is a list
-                if not isinstance(st.session_state.get(key, None), list):
-                    st.session_state[key] = [st.session_state.get(key)] if st.session_state.get(key) is not None else []
+                # ensure state is a list if the user selected something; otherwise leave unset
+                current = st.session_state.get(key, None)
+                if current is not None and not isinstance(current, list):
+                    st.session_state[key] = [current]
                 val = st.multiselect(f"Filter by {col}", options=values_list, key=key)
             else:
-                val = st.selectbox(f"Filter by {col}", options=values_list, key=key)
-            # keep the filters_by_kind mirror up to date
-            st.session_state['filters_by_kind'].setdefault(selected_kind, {})
-            st.session_state['filters_by_kind'][selected_kind][col] = st.session_state.get(key)
+                # for non-multi, do not coerce or set a default; keep existing value if present
+                val = st.selectbox(f"Filter by {col}", options=[''] + values_list, index=0 if st.session_state.get(key) in (None,'') else values_list.index(st.session_state.get(key)), key=key) if values_list else st.selectbox(f"Filter by {col}", options=[''], key=key)
 
-            if st.session_state.get(key):
+            # keep the filters_by_kind mirror up to date but only write when the user actually picked a value
+            st.session_state['filters_by_kind'].setdefault(selected_kind, {})
+            picked = st.session_state.get(key)
+            if picked not in (None, ''):
+                st.session_state['filters_by_kind'][selected_kind][col] = picked
+
+            if st.session_state.get(key) not in (None, ''):
                 selected_filters_ui[col] = st.session_state.get(key)
 
 # Question input
@@ -192,14 +130,38 @@ question = st.text_area('Type your question')
 
 from insight_agent.prompt_builder import build_prompt
 
-if st.button('Ask'):
+# Guard the Ask button: require a Kind and at least one required filter selected.
+# Determine required filters: those with filter_display_order present are considered filterable; but we only require filters explicitly marked 'required'=True in the profile.
+required_missing = False
+required_list = []
+if selected_kind and profile:
+    for c,inf in profile.items():
+        if isinstance(inf, dict) and inf.get('required', False):
+            required_list.append(c)
+            keyc = f"filter_{''.join([ch if (ch.isalnum() or ch=='_') else '_' for ch in str(c)])}"
+            if st.session_state.get(keyc) in (None, ''):
+                required_missing = True
+
+if not selected_kind:
+    st.warning('Select Kind and filters first.')
+
+if required_missing:
+    st.warning('Select Kind and filters first.')
+
+ask_enabled = selected_kind and not required_missing
+if not st.button('Ask', disabled=not ask_enabled):
+    pass
+else:
     # collect selected filters from all filter widgets
     selected_filters = selected_filters_ui if isinstance(selected_filters_ui, dict) else {}
 
     # Debug logging: selected kind, user question, and filters
-    print(f"[ui] selected_kind={selected_kind}")
-    print(f"[ui] user_question={question}")
-    print(f"[ui] selected_filters={selected_filters}")
+    # Use logger instead of prints; only write when TEST_MODE or explicit debug
+    try:
+        if os.environ.get('TEST_MODE')=='1' or st.session_state.get('debug'):
+            logger.debug(f"[ui] selected_kind={selected_kind} selected_filters={selected_filters}")
+    except Exception:
+        pass
 
     # Build or get the LangChain agent executor and call it with the user's question
     from insight_agent.agent import build_agent
@@ -214,7 +176,11 @@ if st.button('Ask'):
         # pass selected_kind into the agent input so it can locate the correct dataset
         agent_response = executor.invoke({"input": question, "kind": selected_kind})
         # print full agent response for debugging (includes intermediate_steps)
-        print("[agent_response]", agent_response)
+        try:
+            if os.environ.get('TEST_MODE')=='1' or st.session_state.get('debug'):
+                logger.debug(f"[agent_response] {str(agent_response)[:1000]}")
+        except Exception:
+            pass
     except Exception as e:
         st.error(f"Agent execution failed: {e}")
         agent_response = {"error": str(e)}
