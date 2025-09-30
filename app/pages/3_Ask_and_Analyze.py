@@ -1,3 +1,4 @@
+from pathlib import Path
 import streamlit as st
 import os
 import json
@@ -134,7 +135,7 @@ if selected_kind:
                     import logging
                     logger = logging.getLogger('ask_and_analyze')
                     if os.environ.get('TEST_MODE')=='1' or st.session_state.get('debug'):
-                        logger.debug(f"{key} options={values_list} before=None forced_default={default_forced}")
+                                logger.debug(f"{key} options={values_list} before=None forced_default={default_forced}")
                 except Exception:
                     pass
             else:
@@ -150,7 +151,7 @@ if selected_kind:
                             import logging
                             logger = logging.getLogger('ask_and_analyze')
                             if os.environ.get('TEST_MODE')=='1' or st.session_state.get('debug'):
-                        logger.debug(f"{key} options={values_list} before={current_val} forced_default={default_forced}")
+                                logger.debug(f"{key} options={values_list} before={current_val} forced_default={default_forced}")
                         except Exception:
                             pass
                     else:
@@ -158,7 +159,7 @@ if selected_kind:
                             import logging
                             logger = logging.getLogger('ask_and_analyze')
                             if os.environ.get('TEST_MODE')=='1' or st.session_state.get('debug'):
-                        logger.debug(f"{key} options={values_list} before={current_val} forced_default=False (already init for this kind)")
+                                logger.debug(f"{key} options={values_list} before={current_val} forced_default=False (already init for this kind)")
                         except Exception:
                             pass
                 else:
@@ -166,7 +167,7 @@ if selected_kind:
                         import logging
                         logger = logging.getLogger('ask_and_analyze')
                         if os.environ.get('TEST_MODE')=='1' or st.session_state.get('debug'):
-                        logger.debug(f"{key} options={values_list} before={current_val} forced_default=False")
+                                logger.debug(f"{key} options={values_list} before={current_val} forced_default=False")
                     except Exception:
                         pass
 
