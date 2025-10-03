@@ -59,13 +59,15 @@ def sql_generation_tool(input_data) -> str:
                                     # mapping_effective.json expected to be a list or dict of mappings
                                     if isinstance(mapping, dict):
                                         for k, v in mapping.items():
-                                            schema_lines.append(f"{k}: {v.get('data_type','unknown')}")
+                                            # prefer canonical_name when available
+                                            canon = v.get('canonical_name') or k
+                                            schema_lines.append(f"{canon}: {v.get('data_type','unknown')}")
                                     else:
                                         # fallback when list
                                         for entry in mapping:
-                                            oname = entry.get('original_name') or entry.get('canonical_name')
+                                            canon = entry.get('canonical_name') or entry.get('original_name')
                                             dtype = entry.get('data_type')
-                                            schema_lines.append(f"{oname}: {dtype}")
+                                            schema_lines.append(f"{canon}: {dtype}")
                             except Exception:
                                 pass
                             break
@@ -88,9 +90,9 @@ def sql_generation_tool(input_data) -> str:
 
         schema_text = '\n'.join(schema_lines) if schema_lines else 'No schema available.'
 
-        # Build filters description
+        # Build filters description (textual only)
         if filters:
-            filters_text = '\n'.join([f"{k} = {v}" for k, v in filters.items()])
+            filters_text = '\n'.join([f"{k}: {v}" for k, v in filters.items()])
         else:
             filters_text = 'No filters selected.'
 
@@ -107,15 +109,18 @@ DIMENSIONS: {dimensions}
 USER_QUESTION: {question}
 
 INSTRUCTIONS (must follow exactly):
-- You MUST use the canonical_name for all columns.
+- You MUST use canonical snake_case column names only (from the SCHEMA section).
 - The SELECT clause MUST only contain aggregations (e.g., SUM, AVG) of the columns from the "Metrics to Select" list.
 - If "Dimensions to Group By" are provided, include them in SELECT and in a GROUP BY clause.
 - Build a WHERE clause using all key-value pairs from FILTERS when provided. If none provided, omit the WHERE clause.
-- All WHERE clause comparisons MUST be case-insensitive using LOWER(column) = LOWER('value').
+- All WHERE clause comparisons MUST be case-insensitive using LOWER(column) = LOWER('<value>').
 - The query MUST end with LIMIT 1000.
 
 OUTPUT:
-Return EXACTLY one JSON object with key 'sql' and the SQL string as its value. Example: {{"sql": "SELECT SUM(dollar_sales) AS dollar_sales, category FROM data WHERE LOWER(brand)=LOWER('X') GROUP BY category LIMIT 1000"}}
+Return EXACTLY one JSON object with key 'sql' and the SQL string as its value.
+
+EXAMPLE:
+{"sql": "SELECT SUM(dollar_sales) AS dollar_sales, SUM(unit_sales) AS unit_sales, SUM(volume_sales) AS volume_sales FROM data WHERE LOWER(market)=LOWER('total us xaoc') AND LOWER(time_agg)=LOWER('latest 52 wks - w/e 08/16/25') LIMIT 1000"}
 """
 
         specialist_prompt = """You are a SQL generator for analytical intents.
@@ -129,12 +134,12 @@ DIMENSIONS: {dimensions}
 USER_QUESTION: {question}
 
 RULES (must follow):
-1) Use ONLY canonical_name for all column references.
+1) Use ONLY canonical snake_case column names for all column references.
 2) SELECT clause MUST only contain aggregations (e.g., SUM, AVG) of the columns from the METRICS list.
 3) If Dimensions are provided, include them in SELECT and in a GROUP BY clause.
 4) Do not perform joins. Single table only.
 5) Do not use SELECT *. Explicitly list columns to return.
-6) Build a WHERE clause using FILTERS when provided; comparisons must be case-insensitive using LOWER().
+6) Build a WHERE clause using FILTERS when provided; comparisons must be case-insensitive using LOWER(column) = LOWER('<value>').
 7) The query MUST end with LIMIT 1000.
 
 OUTPUT:
@@ -158,22 +163,23 @@ Respond with EXACTLY one JSON object with key 'sql'."""
 
 
 
-    # Call the LLM with the assembled prompt
+    # Call the LLM with the assembled prompt in deterministic JSON mode
     try:
         # record the exact prompt used (redact secrets in prompt if present)
         sql_llm_prompt = prompt
         resp = litellm.completion(
             messages=[{"role": "user", "content": prompt}],
             model="gpt-5-mini",
-            max_tokens=1024,
+            max_tokens=2048,
+            temperature=0.0,
             api_key=api_key,
             api_base=api_base,
+            # best-effort JSON mode flag for compatible providers
+            response_format="json",
         )
-    except TypeError:
-        try:
-            resp = litellm.completion(prompt, max_tokens=1024)
-        except TypeError:
-            resp = litellm.completion(prompt)
+    except Exception as e:
+        # surface provider errors to caller in structured form
+        return {"error": f"PROVIDER_ERROR: {e}", "sql_llm_prompt": sql_llm_prompt if 'sql_llm_prompt' in locals() else None, "sql_llm_output_raw": "(provider error)"}
 
     try:
         content = resp.choices[0].message.content if hasattr(resp, 'choices') else resp
