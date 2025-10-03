@@ -176,8 +176,11 @@ class ValidationError(Exception):
     pass
 
 
-def validate_sql(sql: str, kind: str):
-    """Validate SQL against rails: canonical names, symmetric LOWER, LIMIT, whitelist FROM."""
+def validate_sql(sql: str, kind: str, filters: dict = None):
+    """Validate SQL against rails: canonical names, symmetric LOWER, LIMIT, whitelist FROM.
+
+    If filters is provided, ensure each filter appears as a case-insensitive predicate in the SQL.
+    """
     errors = []
 
     # LIMIT
@@ -227,6 +230,20 @@ def validate_sql(sql: str, kind: str):
         low = ident.lower()
         if low in known and ident != low:
             errors.append(f'BAD_CANONICAL_STYLE:{ident}')
+
+    # Fail-fast: ensure every provided filter appears as a case-insensitive predicate
+    if filters:
+        missing = []
+        for col in filters.keys():
+            if col in (None, ''):
+                continue
+            canon = _canonical_style(col)
+            pattern_eq = re.search(rf"LOWER\(\s*{re.escape(canon)}\s*\)\s*=\s*LOWER\(", sql, flags=re.IGNORECASE)
+            pattern_in = re.search(rf"LOWER\(\s*{re.escape(canon)}\s*\)\s+IN\s*\(", sql, flags=re.IGNORECASE)
+            if not (pattern_eq or pattern_in):
+                missing.append(col)
+        if missing:
+            raise ValidationError('MISSING_FILTER_PREDICATES:' + ','.join(missing))
 
     if errors:
         raise ValidationError(','.join(errors))
