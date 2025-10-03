@@ -1,11 +1,10 @@
 {
-  "branch": "main",
-  "repo_head": "d3de1a28a0e4d5387868f6ce8622e36c542abc66",
-  "pr_url": "https://github.com/rohitbhartiyatyson/Tysightv4/pull/32",
-  "ci": {
-    "smoke": "success",
-    "e2e": "unknown"
+  "branches": {
+    "main": "16e8516",
+    "feat/evidence-sections-rails": "36bf988",
+    "feat/sql-hardening-specialist-bypass": "52279f0"
   },
-  "updated_at": "2025-09-29T02:46:21Z",
-  "default_base": "main"
+  "pr_urls": {
+    "feat/sql-hardening-specialist-bypass": "https://github.com/rohitbhartiyatyson/Tysightv4/pull/45"
+  }
 }
