@@ -161,7 +161,9 @@ def build_agent(llm=None):
                 pass
 
             # 3) Specialist deterministic bypass for known intents (compose SQL without LLM)
+            bypassed = False
             if intent in (IntentSchema.sales_performance.value, IntentSchema.yoy_performance.value):
+                bypassed = True
                 try:
                     # compose deterministic SQL
                     dims = inputs.get('dimensions') or inputs.get('dims') or []
@@ -238,85 +240,131 @@ def build_agent(llm=None):
                 }
                 sql_result = sql_generation_tool.func(sql_input)
             # If tool signals INCOMPLETE_SQL, attempt deterministic fallback for specialist intents
-            if isinstance(sql_result, dict) and 'error' in sql_result:
-                err = sql_result.get('error')
-                intermediates.append(('error', sql_result))
-                if err == 'INCOMPLETE_SQL':
-                    # Build deterministic fallback only for specialist intents
-                    try:
-                        # Build a basic SELECT using metrics determined earlier
-                        def build_fallback(metrics_list, dims, filters_dict, kind_name):
-                            if not metrics_list:
-                                # fallback to a safe metric if none (should not happen in real flow)
-                                metrics_list = ['dollar_sales']
-                            # Build select clause: keep YOY pairs when present
-                            select_parts = []
-                            for m in metrics_list:
-                                # if metric appears to be a metric alias, just include SUM(metric) as metric
-                                select_parts.append(f"SUM({m}) AS {m}")
-                            select_clause = ', '.join(select_parts)
-                            base = f"SELECT {select_clause} FROM data"
-                            # Enforce filters using enforcer
-                            from insight_agent.sql_validator import enforce_filters
-                            sql_with_filters = enforce_filters(base + ' LIMIT 1000', filters_dict or {})
-                            # If dimensions present, add GROUP BY
-                            if dims:
-                                dims_clause = ', '.join(dims)
-                                # insert GROUP BY before LIMIT
-                                sql_with_filters = sql_with_filters.replace(' LIMIT 1000', f' GROUP BY {dims_clause} LIMIT 1000')
-                            return sql_with_filters
-
-                        fallback_sql = build_fallback(metrics, sql_input.get('dimensions') or [], sql_input.get('filters') or {}, kind)
-                        intermediates.append(('fallback_used', True))
-                        # Ensure SQL LLM markers are present (from the failed tool output) or mark as skipped
+            if not bypassed:
+                if isinstance(sql_result, dict) and 'error' in sql_result:
+                    err = sql_result.get('error')
+                    intermediates.append(('error', sql_result))
+                    # only attempt deterministic fallback for specialist intents
+                    specialist_intents = {i.value for i in IntentSchema}
+                    if err == 'INCOMPLETE_SQL' and intent in specialist_intents:
                         try:
-                            if isinstance(sql_result, dict):
-                                append_if_missing('sql_llm_prompt', sql_result.get('sql_llm_prompt') or "(skipped: fallback)")
-                                append_if_missing('sql_llm_output_raw', sql_result.get('sql_llm_output_raw') or "(skipped)")
-                        except Exception:
-                            pass
+                            # Build a basic SELECT using metrics determined earlier
+                            def build_fallback(metrics_list, dims, filters_dict, kind_name):
+                                if not metrics_list:
+                                    metrics_list = ['dollar_sales']
+                                select_parts = [f"SUM({m}) AS {m}" for m in metrics_list]
+                                select_clause = ', '.join(select_parts)
+                                base = f"SELECT {select_clause} FROM data"
+                                from insight_agent.sql_validator import enforce_filters
+                                sql_with_filters = enforce_filters(base + ' LIMIT 1000', filters_dict or {})
+                                if dims:
+                                    dims_clause = ', '.join(dims)
+                                    sql_with_filters = sql_with_filters.replace(' LIMIT 1000', f' GROUP BY {dims_clause} LIMIT 1000')
+                                return sql_with_filters
 
-                        intermediates.append(('sql', fallback_sql))
-                        # Compute a final rails_status for the fallback SQL and emit it
-                        try:
-                            predicates_applied = fallback_sql.count('LOWER(')
+                            fallback_sql = build_fallback(metrics, sql_input.get('dimensions') or [], sql_input.get('filters') or {}, kind)
+                            intermediates.append(('fallback_used', True))
                             try:
-                                from insight_agent.sql_validator import validate_sql
-                                try:
-                                    validate_sql(fallback_sql, kind, sql_input.get('filters') or {})
-                                    validator_passed = True
-                                    failure_code = None
-                                except Exception:
-                                    validator_passed = False
-                                    failure_code = 'VALIDATION_FAILED'
-                            except Exception:
-                                validator_passed = False
-                                failure_code = 'VALIDATION_FAILED'
-
-                            rails_status_final = {
-                                'preflight_complete': True,
-                                'filters_enforced': (predicates_applied>0),
-                                'predicates_applied': predicates_applied,
-                                'validator_passed': validator_passed,
-                                'fallback_used': True,
-                                'failure_code': failure_code
-                            }
-                            intermediates.append(('rails_status', rails_status_final))
-                        except Exception:
-                            try:
-                                intermediates.append(('rails_status', {'preflight_complete': True, 'filters_enforced': True, 'predicates_applied': 0, 'validator_passed': False, 'fallback_used': True, 'failure_code': None}))
+                                if isinstance(sql_result, dict):
+                                    append_if_missing('sql_llm_prompt', sql_result.get('sql_llm_prompt') or "(skipped: fallback)")
+                                    append_if_missing('sql_llm_output_raw', sql_result.get('sql_llm_output_raw') or "(skipped)")
                             except Exception:
                                 pass
 
-                        sql_text = fallback_sql
-                    except Exception as e:
-                        intermediates.append(('fallback_error', str(e)))
+                            intermediates.append(('sql', fallback_sql))
+                            try:
+                                predicates_applied = fallback_sql.count('LOWER(')
+                                try:
+                                    from insight_agent.sql_validator import validate_sql
+                                    try:
+                                        validate_sql(fallback_sql, kind, sql_input.get('filters') or {})
+                                        validator_passed = True
+                                        failure_code = None
+                                    except Exception:
+                                        validator_passed = False
+                                        failure_code = 'VALIDATION_FAILED'
+                                except Exception:
+                                    validator_passed = False
+                                    failure_code = 'VALIDATION_FAILED'
+
+                                rails_status_final = {
+                                    'preflight_complete': True,
+                                    'filters_enforced': (predicates_applied>0),
+                                    'predicates_applied': predicates_applied,
+                                    'validator_passed': validator_passed,
+                                    'fallback_used': True,
+                                    'failure_code': failure_code
+                                }
+                                intermediates.append(('rails_status', rails_status_final))
+                            except Exception:
+                                try:
+                                    intermediates.append(('rails_status', {'preflight_complete': True, 'filters_enforced': True, 'predicates_applied': 0, 'validator_passed': False, 'fallback_used': True, 'failure_code': None}))
+                                except Exception:
+                                    pass
+
+                            sql_text = fallback_sql
+                        except Exception as e:
+                            intermediates.append(('fallback_error', str(e)))
+                            return {'final_answer': 'Could not generate SQL', 'intermediate_steps': intermediates}
+                    else:
+                        # For non-specialist intents, surface the incomplete rails_status and stop
+                        try:
+                            rails_top = None
+                            if isinstance(sql_result.get('rails_status'), dict):
+                                rails_top = sql_result.get('rails_status')
+                            elif isinstance(sql_result.get('sql'), dict) and isinstance(sql_result.get('sql').get('rails_status'), dict):
+                                rails_top = sql_result.get('sql').get('rails_status')
+                            intermediates.append(('rails_status', rails_top or {'preflight_complete': False, 'filters_enforced': False, 'predicates_applied': 0, 'validator_passed': False, 'fallback_used': False, 'failure_code': err}))
+                        except Exception:
+                            pass
+                        try:
+                            append_if_missing('sql_llm_prompt', sql_result.get('sql_llm_prompt') or "(skipped: error path)")
+                            append_if_missing('sql_llm_output_raw', sql_result.get('sql_llm_output_raw') or "(skipped)")
+                        except Exception:
+                            pass
+                        try:
+                            append_if_missing('query_exec', {'engine': 'duckdb', 'binding': 'data', 'rows': 0, 'elapsed_ms': 0, 'error': f"sql_generation_error: {err}"})
+                        except Exception:
+                            pass
+                        try:
+                            append_if_missing('insights_llm_prompt', "(skipped: error path)")
+                            append_if_missing('insights_llm_output', f"skipped: {err}")
+                        except Exception:
+                            pass
                         return {'final_answer': 'Could not generate SQL', 'intermediate_steps': intermediates}
                 else:
-                    return {'final_answer': 'Could not generate SQL', 'intermediate_steps': intermediates}
-            else:
-                sql_text = sql_result
-                intermediates.append(('sql', sql_text))
+                    # Normalize structured sql_result when present
+                    if isinstance(sql_result, dict):
+                        nested = sql_result.get('sql')
+                        sql_str = None
+                        rails_top = None
+                        if isinstance(nested, dict):
+                            sql_str = nested.get('sql')
+                            rails_top = nested.get('rails_status') or sql_result.get('rails_status')
+                        else:
+                            sql_str = nested if isinstance(nested, str) else None
+                            rails_top = sql_result.get('rails_status')
+                        intermediates.append(('sql', sql_str or sql_result))
+                        intermediates.append(('rails_status', rails_top))
+                        try:
+                            if 'sql_llm_prompt' in sql_result:
+                                intermediates.append(('sql_llm_prompt', sql_result.get('sql_llm_prompt')))
+                            if 'sql_llm_output_raw' in sql_result:
+                                intermediates.append(('sql_llm_output_raw', sql_result.get('sql_llm_output_raw')))
+                            # ensure placeholders exist so UI/tests always see these markers
+                            append_if_missing('sql_llm_prompt', sql_result.get('sql_llm_prompt') or "(skipped)")
+                            append_if_missing('sql_llm_output_raw', sql_result.get('sql_llm_output_raw') or "(skipped)")
+                        except Exception:
+                            pass
+                        if sql_str:
+                            sql_text = sql_str
+                        elif isinstance(nested, str):
+                            sql_text = nested
+                        else:
+                            sql_text = str(sql_result.get('sql'))
+                    else:
+                        sql_text = sql_result
+                        intermediates.append(('sql', sql_text))
 
         # 4) Execute SQL against DuckDB (using existing executor)
         df = pd.DataFrame()
