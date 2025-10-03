@@ -5,6 +5,7 @@ from insight_agent.tools import (
     sql_generation_tool,
     data_synthesis_tool,
 )
+from insight_agent.contracts import IntentSchema
 from insight_agent.query_executor import execute_query
 import pandas as pd
 import json
