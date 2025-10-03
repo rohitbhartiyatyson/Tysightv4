@@ -26,7 +26,7 @@ def test_agent_flow(monkeypatch):
     import litellm
     tool_outputs = [
         json.dumps({"intent": "performance_summary", "entities": {"brand": "Jimmy Dean"}}),
-        json.dumps({"sql": "SELECT dollar_sales FROM table WHERE brand='Jimmy Dean' LIMIT 10"}),
+        json.dumps({"sql": "SELECT dollar_sales FROM data WHERE brand='Jimmy Dean' LIMIT 10"}),
         "Jimmy Dean saw a 10% increase in dollar sales."
     ]
 
