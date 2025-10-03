@@ -23,6 +23,16 @@ def build_agent(llm=None):
 
         intermediates = []
 
+        # helper to append a top-level intermediate only if it's not already present
+        def append_if_missing(key, value):
+            try:
+                for kk, vv in intermediates:
+                    if kk == key:
+                        return
+            except Exception:
+                pass
+            intermediates.append((key, value))
+
         # 1) Deterministic guard: if the question starts with a SQL SELECT, bypass the LLM
         parsed_intent = None
         if isinstance(question, str) and question.strip().lower().startswith('select'):
@@ -72,6 +82,23 @@ def build_agent(llm=None):
                         intermediates.append(('sql_llm_output_raw', sql_result.get('sql_llm_output_raw')))
                 except Exception:
                     pass
+                # ensure SQL LLM markers present if skipped
+                try:
+                    append_if_missing('sql_llm_prompt', "(skipped: error path)")
+                    append_if_missing('sql_llm_output_raw', "(skipped)")
+                except Exception:
+                    pass
+                # ensure unified query_exec present with error
+                try:
+                    append_if_missing('query_exec', {'engine': 'duckdb', 'binding': 'data', 'rows': 0, 'elapsed_ms': 0, 'error': f"sql_generation_error: {sql_result.get('error')}"})
+                except Exception:
+                    pass
+                # ensure insights markers present
+                try:
+                    append_if_missing('insights_llm_prompt', "(skipped: error path)")
+                    append_if_missing('insights_llm_output', f"skipped: {sql_result.get('error')}")
+                except Exception:
+                    pass
                 # do not proceed to execute
                 return {'final_answer': 'Could not generate SQL', 'intermediate_steps': intermediates}
             else:
@@ -110,6 +137,12 @@ def build_agent(llm=None):
                     intermediates.append(('sql', sql_text))
                     # ensure rails_status top-level present (none info)
                     intermediates.append(('rails_status', None))
+                    # mark SQL LLM skipped in deterministic template path
+                    try:
+                        append_if_missing('sql_llm_prompt', "(skipped: deterministic template)")
+                        append_if_missing('sql_llm_output_raw', "(skipped)")
+                    except Exception:
+                        pass
         else:
             # 2a) Metric selection (code tool)
             metrics = metric_selection_tool.func(intent)
