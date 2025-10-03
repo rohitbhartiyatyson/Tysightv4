@@ -147,24 +147,95 @@ def build_agent(llm=None):
         else:
             # 2a) Metric selection (code tool)
             metrics = metric_selection_tool.func(intent)
+            # Metrics default for sales_performance when empty
+            if intent == IntentSchema.sales_performance.value and not metrics:
+                metrics = ["dollar_sales", "unit_sales", "volume_sales"]
             intermediates.append(('metrics', metrics))
 
             # Build and emit the plan after metrics so metrics count is accurate
             try:
-                plan_summary = f"intent={intent} • metrics={len(metrics) if isinstance(metrics, (list,tuple)) else 0} • dims=0 • filters={len(inputs.get('filters') or {})} • engine=duckdb • table=data"
+                plan_summary = f"intent={intent} • metrics={len(metrics) if isinstance(metrics, (list,tuple)) else 0} • dims={len(inputs.get('dimensions') or inputs.get('dims') or []) if isinstance(inputs.get('dimensions') or inputs.get('dims') or [], (list,tuple)) else 0} • filters={len(inputs.get('filters') or {})} • engine=duckdb • table=data"
                 intermediates.append(('plan', plan_summary))
             except Exception:
                 pass
 
-            # 3) SQL generation
-            sql_input = {
-                'question': question,
-                'kind': kind,
-                'filters': inputs.get('filters') or inputs.get('selected_filters') or {},
-                'metrics': metrics,
-                'mode': 'specialist',
-            }
-            sql_result = sql_generation_tool.func(sql_input)
+            # 3) Specialist deterministic bypass for known intents (compose SQL without LLM)
+            if intent in (IntentSchema.sales_performance.value, IntentSchema.yoy_performance.value):
+                try:
+                    # compose deterministic SQL
+                    dims = inputs.get('dimensions') or inputs.get('dims') or []
+                    filters_local = inputs.get('filters') or inputs.get('selected_filters') or {}
+                    from insight_agent.sql_validator import enforce_filters, normalize_sql, validate_sql
+                    if intent == IntentSchema.sales_performance.value:
+                        metrics_list = metrics or ["dollar_sales", "unit_sales", "volume_sales"]
+                        select_parts = [f"SUM({m}) AS {m}" for m in metrics_list]
+                    else:
+                        # yoy_performance: find base metrics and their _ya counterparts
+                        base_metrics = []
+                        for m in metrics:
+                            if m.endswith('_ya'):
+                                base = m[:-3]
+                                if base not in base_metrics:
+                                    base_metrics.append(base)
+                            else:
+                                # only add if corresponding _ya in metrics
+                                if f"{m}_ya" in metrics and m not in base_metrics:
+                                    base_metrics.append(m)
+                        if not base_metrics:
+                            base_metrics = ["dollar_sales"]
+                        select_parts = []
+                        for b in base_metrics:
+                            a = b
+                            ya = f"{b}_ya"
+                            select_parts.append(f"SUM({a}) AS {a}")
+                            select_parts.append(f"SUM({ya}) AS {ya}")
+                            select_parts.append(f"(SUM({a}) - SUM({ya})) AS {b}_delta")
+                            select_parts.append(f"CASE WHEN SUM({ya}) IS NULL OR SUM({ya})=0 THEN NULL ELSE (SUM({a}) - SUM({ya})) * 1.0 / NULLIF(SUM({ya}),0) END AS {b}_pct_delta")
+                    select_clause = ', '.join(select_parts)
+                    sql_comp = f"SELECT {select_clause} FROM data"
+                    # enforce filters and dims, ensure LIMIT 1000
+                    sql_with_filters = enforce_filters(sql_comp + ' LIMIT 1000', filters_local or {})
+                    if dims:
+                        dims_clause = ', '.join(dims)
+                        sql_with_filters = sql_with_filters.replace(' LIMIT 1000', f' GROUP BY {dims_clause} LIMIT 1000')
+                    # normalize and validate
+                    try:
+                        sql_norm = normalize_sql(sql_with_filters, kind)
+                    except Exception:
+                        sql_norm = sql_with_filters
+                    try:
+                        validate_sql(sql_norm, kind, filters_local or {})
+                        validator_passed = True
+                    except Exception:
+                        validator_passed = False
+                    predicates_applied = sql_norm.count('LOWER(')
+                    rails_status_final = {
+                        'preflight_complete': True,
+                        'filters_enforced': (predicates_applied>0),
+                        'predicates_applied': predicates_applied,
+                        'validator_passed': validator_passed,
+                        'fallback_used': False,
+                        'specialist_bypass': True,
+                        'failure_code': None if validator_passed else 'VALIDATION_FAILED'
+                    }
+                    intermediates.append(('sql', sql_norm))
+                    intermediates.append(('rails_status', rails_status_final))
+                    append_if_missing('sql_llm_prompt', "(skipped: deterministic template)")
+                    append_if_missing('sql_llm_output_raw', "(skipped)")
+                    sql_text = sql_norm
+                except Exception as e:
+                    intermediates.append(('fallback_error', str(e)))
+                    return {'final_answer': 'Could not generate SQL', 'intermediate_steps': intermediates}
+            else:
+                # 3) SQL generation
+                sql_input = {
+                    'question': question,
+                    'kind': kind,
+                    'filters': inputs.get('filters') or inputs.get('selected_filters') or {},
+                    'metrics': metrics,
+                    'mode': 'specialist',
+                }
+                sql_result = sql_generation_tool.func(sql_input)
             # If tool signals INCOMPLETE_SQL, attempt deterministic fallback for specialist intents
             if isinstance(sql_result, dict) and 'error' in sql_result:
                 err = sql_result.get('error')
