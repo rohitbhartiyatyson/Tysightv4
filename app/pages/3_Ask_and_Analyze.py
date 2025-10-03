@@ -174,7 +174,45 @@ else:
         except Exception:
             pass
         # pass selected_kind into the agent input so it can locate the correct dataset
-        agent_response = executor.invoke({"input": question, "kind": selected_kind})
+        # Build canonical filters dict and pass into agent
+        filters = {}
+        try:
+            kind_map_dir = os.path.join('domain','catalog','kinds', selected_kind)
+            mapping_file = None
+            for root, dirs, files in os.walk(kind_map_dir):
+                if 'mapping_effective.json' in files:
+                    mapping_file = os.path.join(root, 'mapping_effective.json')
+                    break
+            mapping_lookup = {}
+            if mapping_file and os.path.exists(mapping_file):
+                try:
+                    with open(mapping_file, 'r') as mf:
+                        mlist = json.load(mf)
+                        for rec in mlist:
+                            orig = (rec.get('original_name') or '').strip()
+                            canon = (rec.get('canonical_name') or orig).strip()
+                            if orig:
+                                mapping_lookup[orig.lower()] = canon
+                            if canon:
+                                mapping_lookup[canon.lower()] = canon
+                except Exception:
+                    mapping_lookup = {}
+        except Exception:
+            mapping_lookup = {}
+
+        for ui_col, ui_val in (selected_filters or {}).items():
+            if ui_val in (None, ''):
+                continue
+            canon_col = mapping_lookup.get(ui_col.lower(), ui_col)
+            filters[canon_col] = ui_val
+
+        try:
+            if os.environ.get('TEST_MODE')=='1' or st.session_state.get('debug'):
+                logger.debug(f"[ui] canonical_filters={filters}")
+        except Exception:
+            pass
+
+        agent_response = executor.invoke({"input": question, "kind": selected_kind, "filters": filters, "dimensions": []})
         # print full agent response for debugging (includes intermediate_steps)
         try:
             if os.environ.get('TEST_MODE')=='1' or st.session_state.get('debug'):
