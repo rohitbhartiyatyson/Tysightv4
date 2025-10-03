@@ -160,6 +160,8 @@ Respond with EXACTLY one JSON object with key 'sql'."""
 
     # Call the LLM with the assembled prompt
     try:
+        # record the exact prompt used (redact secrets in prompt if present)
+        sql_llm_prompt = prompt
         resp = litellm.completion(
             messages=[{"role": "user", "content": prompt}],
             model="gpt-5-mini",
@@ -177,6 +179,9 @@ Respond with EXACTLY one JSON object with key 'sql'."""
         content = resp.choices[0].message.content if hasattr(resp, 'choices') else resp
     except Exception:
         content = resp
+
+    # Save raw model output for evidence
+    sql_llm_output_raw = content
 
     # Try to parse JSON and return sql
     try:
@@ -201,19 +206,55 @@ Respond with EXACTLY one JSON object with key 'sql'."""
         mode_local = locals().get('mode', 'specialist')
         if not complete:
             if mode_local == 'generalist':
-                return {"error": "INCOMPLETE_SQL: your question did not specify what to calculate; try 'dollar sales by ...' or select a template."}
+                # build a rails status
+                rails_status = {
+                    'preflight_complete': False,
+                    'filters_enforced': False,
+                    'predicates_applied': 0,
+                    'validator_passed': False,
+                    'fallback_used': False,
+                    'failure_code': 'INCOMPLETE_SQL'
+                }
+                return {"error": "INCOMPLETE_SQL: your question did not specify what to calculate; try 'dollar sales by ...' or select a template.", "rails_status": rails_status, "sql_llm_prompt": sql_llm_prompt, "sql_llm_output_raw": sql_llm_output_raw}
             # signal upstream (agent) by returning a sentinel dict; agent will attempt fallback for specialist intents
-            return {"error": "INCOMPLETE_SQL"}
+            rails_status = {
+                'preflight_complete': False,
+                'filters_enforced': False,
+                'predicates_applied': 0,
+                'validator_passed': False,
+                'fallback_used': False,
+                'failure_code': 'INCOMPLETE_SQL'
+            }
+            return {"error": "INCOMPLETE_SQL", "rails_status": rails_status, "sql_llm_prompt": sql_llm_prompt, "sql_llm_output_raw": sql_llm_output_raw}
 
         # Only apply normalization/filters/validation when the SQL is complete
         if kind_local and complete:
             sql_text = normalize_sql(sql_text, kind_local)
-            sql_text = enforce_filters(sql_text, filters or {})
-            validate_sql(sql_text, kind_local, filters or {})
+            # apply filters enforcement and compute predicate count
+            sql_before = sql_text
+            enforced_sql = enforce_filters(sql_text, filters or {})
+            predicates_applied = 0
+            if enforced_sql != sql_before:
+                predicates_applied = enforced_sql.count('LOWER(')
+            sql_text = enforced_sql
+            try:
+                validate_sql(sql_text, kind_local, filters or {})
+                validator_passed = True
+            except Exception:
+                validator_passed = False
+            rails_status = {
+                'preflight_complete': True,
+                'filters_enforced': (predicates_applied>0),
+                'predicates_applied': predicates_applied,
+                'validator_passed': validator_passed,
+                'fallback_used': False,
+                'failure_code': None if validator_passed else 'VALIDATION_FAILED'
+            }
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": str(e), "sql_llm_prompt": sql_llm_prompt, "sql_llm_output_raw": sql_llm_output_raw}
 
-    return sql_text
+    return {"sql": sql_text, "rails_status": rails_status, "sql_llm_prompt": sql_llm_prompt, "sql_llm_output_raw": sql_llm_output_raw}
+
 
 @tool
 def data_synthesis_tool(input_text: str) -> str:
