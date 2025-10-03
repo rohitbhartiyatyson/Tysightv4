@@ -51,29 +51,45 @@ def build_agent(llm=None):
                 'mode': 'generalist',
             }
             sql_result = sql_generation_tool.func(sql_input)
-            # enforce contract: tool returns dict with either 'error' or structured results
+            # enforce contract: tool may return dict with 'error' or structured results, or a plain SQL string
             if isinstance(sql_result, dict) and 'error' in sql_result:
                 intermediates.append(('error', sql_result))
-                # always emit top-level rails_status if present
+                # extract rails_status from several possible locations and emit top-level rails_status
                 try:
-                    rails = sql_result.get('rails_status')
-                    intermediates.append(('rails_status', rails))
+                    rails_top = None
+                    if isinstance(sql_result.get('rails_status'), dict):
+                        rails_top = sql_result.get('rails_status')
+                    elif isinstance(sql_result.get('sql'), dict) and isinstance(sql_result.get('sql').get('rails_status'), dict):
+                        rails_top = sql_result.get('sql').get('rails_status')
+                    intermediates.append(('rails_status', rails_top or {'preflight_complete': False, 'filters_enforced': False, 'predicates_applied': 0, 'validator_passed': False, 'fallback_used': False, 'failure_code': sql_result.get('error')}))
+                except Exception:
+                    pass
+                # also surface prompts if provided
+                try:
+                    if isinstance(sql_result, dict) and sql_result.get('sql_llm_prompt'):
+                        intermediates.append(('sql_llm_prompt', sql_result.get('sql_llm_prompt')))
+                    if isinstance(sql_result, dict) and sql_result.get('sql_llm_output_raw'):
+                        intermediates.append(('sql_llm_output_raw', sql_result.get('sql_llm_output_raw')))
                 except Exception:
                     pass
                 # do not proceed to execute
                 return {'final_answer': 'Could not generate SQL', 'intermediate_steps': intermediates}
             else:
                 # sql_result may be a string or a dict containing sql info
-                sql_text = sql_result
-                intermediates.append(('sql', sql_text))
-                # if tool returned structured dict, emit rails_status and prompts at top-level
+                # normalize to extract SQL string and rails_status if present
+                sql_str = None
+                rails_top = None
                 if isinstance(sql_result, dict):
-                    try:
-                        # emit rails_status as top-level for UI convenience
-                        rails = sql_result.get('rails_status')
-                        intermediates.append(('rails_status', rails))
-                    except Exception:
-                        pass
+                    nested = sql_result.get('sql')
+                    if isinstance(nested, dict):
+                        sql_str = nested.get('sql')
+                        rails_top = nested.get('rails_status') or sql_result.get('rails_status')
+                    else:
+                        sql_str = nested if isinstance(nested, str) else None
+                        rails_top = sql_result.get('rails_status')
+                    # prefer to emit clean SQL string as the 'sql' intermediate
+                    intermediates.append(('sql', sql_str or sql_result))
+                    intermediates.append(('rails_status', rails_top))
                     try:
                         if 'sql_llm_prompt' in sql_result:
                             intermediates.append(('sql_llm_prompt', sql_result.get('sql_llm_prompt')))
@@ -81,6 +97,19 @@ def build_agent(llm=None):
                             intermediates.append(('sql_llm_output_raw', sql_result.get('sql_llm_output_raw')))
                     except Exception:
                         pass
+                    # set sql_text string for execution
+                    if sql_str:
+                        sql_text = sql_str
+                    elif isinstance(nested, str):
+                        sql_text = nested
+                    else:
+                        # fallback: coerce to string
+                        sql_text = str(sql_result.get('sql'))
+                else:
+                    sql_text = sql_result
+                    intermediates.append(('sql', sql_text))
+                    # ensure rails_status top-level present (none info)
+                    intermediates.append(('rails_status', None))
         else:
             # 2a) Metric selection (code tool)
             metrics = metric_selection_tool.func(intent)
