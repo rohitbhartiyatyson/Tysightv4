@@ -39,13 +39,6 @@ def build_agent(llm=None):
 
         intent = parsed_intent.get('intent') if isinstance(parsed_intent, dict) else str(parsed_intent)
 
-        # Build one-line plan summary and add to intermediates
-        try:
-            plan_summary = f"intent={intent} • metrics={0 if not isinstance(parsed_intent, dict) else 0} • dims=0 • filters={len(inputs.get('filters') or {})} • engine=duckdb • table=data"
-            intermediates.append(('plan', plan_summary))
-        except Exception:
-            pass
-
         # 2) Branching logic: if intent indicates a direct SQL request, bypass metric selection
         if intent == 'direct_sql_query':
             intermediates.append(('branch', 'direct_sql'))
@@ -70,6 +63,13 @@ def build_agent(llm=None):
             # 2a) Metric selection (code tool)
             metrics = metric_selection_tool.func(intent)
             intermediates.append(('metrics', metrics))
+
+            # Build and emit the plan after metrics so metrics count is accurate
+            try:
+                plan_summary = f"intent={intent} • metrics={len(metrics) if isinstance(metrics, (list,tuple)) else 0} • dims=0 • filters={len(inputs.get('filters') or {})} • engine=duckdb • table=data"
+                intermediates.append(('plan', plan_summary))
+            except Exception:
+                pass
 
             # 3) SQL generation
             sql_input = {
