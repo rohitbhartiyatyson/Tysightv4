@@ -73,9 +73,44 @@ def build_agent(llm=None):
                 'mode': 'specialist',
             }
             sql_result = sql_generation_tool.func(sql_input)
+            # If tool signals INCOMPLETE_SQL, attempt deterministic fallback for specialist intents
             if isinstance(sql_result, dict) and 'error' in sql_result:
+                err = sql_result.get('error')
                 intermediates.append(('error', sql_result))
-                return {'final_answer': 'Could not generate SQL', 'intermediate_steps': intermediates}
+                if err == 'INCOMPLETE_SQL':
+                    # Build deterministic fallback only for specialist intents
+                    try:
+                        # Build a basic SELECT using metrics determined earlier
+                        def build_fallback(metrics_list, dims, filters_dict, kind_name):
+                            if not metrics_list:
+                                # fallback to a safe metric if none (should not happen in real flow)
+                                metrics_list = ['dollar_sales']
+                            # Build select clause: keep YOY pairs when present
+                            select_parts = []
+                            for m in metrics_list:
+                                # if metric appears to be a metric alias, just include SUM(metric) as metric
+                                select_parts.append(f"SUM({m}) AS {m}")
+                            select_clause = ', '.join(select_parts)
+                            base = f"SELECT {select_clause} FROM data"
+                            # Enforce filters using enforcer
+                            from insight_agent.sql_validator import enforce_filters
+                            sql_with_filters = enforce_filters(base + ' LIMIT 1000', filters_dict or {})
+                            # If dimensions present, add GROUP BY
+                            if dims:
+                                dims_clause = ', '.join(dims)
+                                # insert GROUP BY before LIMIT
+                                sql_with_filters = sql_with_filters.replace(' LIMIT 1000', f' GROUP BY {dims_clause} LIMIT 1000')
+                            return sql_with_filters
+
+                        fallback_sql = build_fallback(metrics, sql_input.get('dimensions') or [], sql_input.get('filters') or {}, kind)
+                        intermediates.append(('fallback_used', True))
+                        intermediates.append(('sql', fallback_sql))
+                        sql_text = fallback_sql
+                    except Exception as e:
+                        intermediates.append(('fallback_error', str(e)))
+                        return {'final_answer': 'Could not generate SQL', 'intermediate_steps': intermediates}
+                else:
+                    return {'final_answer': 'Could not generate SQL', 'intermediate_steps': intermediates}
             else:
                 sql_text = sql_result
                 intermediates.append(('sql', sql_text))
