@@ -97,12 +97,103 @@ def normalize_sql(sql: str, kind: str) -> str:
     return sql
 
 
+
+def is_sql_complete(sql: str) -> bool:
+    """Return True if SQL contains a SELECT ... FROM pattern (case-insensitive), False otherwise.
+
+    This is a light preflight check used to detect incomplete model outputs like "WHERE ... LIMIT ...".
+    """
+    if not sql or not str(sql).strip():
+        return False
+    # Ensure SELECT appears before FROM (ignore case, across lines)
+    return bool(re.search(r'(?is)\bselect\b.*\bfrom\b', sql))
+
+
+
+def _escape_literal(val: str) -> str:
+    return str(val).replace("'", "''")
+
+
+def enforce_filters(sql: str, filters: dict) -> str:
+    """Ensure provided filters appear in the SQL as case-insensitive predicates.
+
+    - If filters is empty, return the original SQL
+    - If filters non-empty and SQL lacks WHERE, insert one before GROUP BY/ORDER BY/HAVING
+    - If SQL has WHERE, append AND (...)
+    - Builds case-insensitive predicates using LOWER(col) = LOWER('val') or LOWER(col) IN (...)
+    - Escapes single quotes in values
+    - Preserves existing LIMIT clause (re-appends if necessary)
+    """
+    if not filters:
+        return sql
+
+    orig = sql or ''
+    s = orig.strip()
+    trailing_semicolon = s.endswith(';')
+    if trailing_semicolon:
+        s = s[:-1].rstrip()
+
+    # Extract LIMIT clause if present
+    limit_match = re.search(r"(?i)\blimit\s+\d+\b", s)
+    limit_clause = ''
+    if limit_match:
+        limit_start = limit_match.start()
+        limit_clause = s[limit_start:]
+        s = s[:limit_start].rstrip()
+
+    # Insert position before GROUP BY / ORDER BY / HAVING
+    m = re.search(r"(?i)\b(group\s+by|order\s+by|having)\b", s)
+    insert_pos = m.start() if m else len(s)
+
+    preds = []
+    for col, val in filters.items():
+        if val in (None, ''):
+            continue
+        canon_col = _canonical_style(col)
+        if isinstance(val, (list, tuple)):
+            items = [f"LOWER('{_escape_literal(v)}')" for v in val if v not in (None, '')]
+            if not items:
+                continue
+            preds.append(f"LOWER({canon_col}) IN ({', '.join(items)})")
+        else:
+            preds.append(f"LOWER({canon_col}) = LOWER('{_escape_literal(val)}')")
+
+    if not preds:
+        return orig
+
+    predicates_str = ' AND '.join([f"({p})" for p in preds])
+
+    head = s[:insert_pos]
+    tail = s[insert_pos:]
+
+    if re.search(r"(?i)\bwhere\b", head):
+        new_head = head + ' AND ' + '(' + predicates_str + ')'
+    else:
+        new_head = head + ' WHERE ' + '(' + predicates_str + ')'
+
+    final = new_head + tail
+    if limit_clause:
+        final = final.rstrip() + ' ' + limit_clause
+    else:
+        final = final.rstrip() + ' LIMIT 1000'
+
+    if trailing_semicolon:
+        final = final + ';'
+
+    return final
+
+
+
+
 class ValidationError(Exception):
     pass
 
 
-def validate_sql(sql: str, kind: str):
-    """Validate SQL against rails: canonical names, symmetric LOWER, LIMIT, whitelist FROM."""
+def validate_sql(sql: str, kind: str, filters: dict = None):
+    """Validate SQL against rails: canonical names, symmetric LOWER, LIMIT, whitelist FROM.
+
+    If filters is provided, ensure each filter appears as a case-insensitive predicate in the SQL.
+    """
     errors = []
 
     # LIMIT
@@ -152,6 +243,20 @@ def validate_sql(sql: str, kind: str):
         low = ident.lower()
         if low in known and ident != low:
             errors.append(f'BAD_CANONICAL_STYLE:{ident}')
+
+    # Fail-fast: ensure every provided filter appears as a case-insensitive predicate
+    if filters:
+        missing = []
+        for col in filters.keys():
+            if col in (None, ''):
+                continue
+            canon = _canonical_style(col)
+            pattern_eq = re.search(rf"LOWER\(\s*{re.escape(canon)}\s*\)\s*=\s*LOWER\(", sql, flags=re.IGNORECASE)
+            pattern_in = re.search(rf"LOWER\(\s*{re.escape(canon)}\s*\)\s+IN\s*\(", sql, flags=re.IGNORECASE)
+            if not (pattern_eq or pattern_in):
+                missing.append(col)
+        if missing:
+            raise ValidationError('MISSING_FILTER_PREDICATES:' + ','.join(missing))
 
     if errors:
         raise ValidationError(','.join(errors))

@@ -8,6 +8,7 @@ from insight_agent.tools import (
 from insight_agent.query_executor import execute_query
 import pandas as pd
 import json
+from insight_agent.llm_client import get_summary_from_df
 
 
 def build_agent(llm=None):
@@ -22,6 +23,16 @@ def build_agent(llm=None):
         kind = inputs.get('kind') or ''
 
         intermediates = []
+
+        # helper to append a top-level intermediate only if it's not already present
+        def append_if_missing(key, value):
+            try:
+                for kk, vv in intermediates:
+                    if kk == key:
+                        return
+            except Exception:
+                pass
+            intermediates.append((key, value))
 
         # 1) Deterministic guard: if the question starts with a SQL SELECT, bypass the LLM
         parsed_intent = None
@@ -51,18 +62,99 @@ def build_agent(llm=None):
                 'mode': 'generalist',
             }
             sql_result = sql_generation_tool.func(sql_input)
-            # enforce contract: tool returns plain SQL string on success, or dict with error
+            # enforce contract: tool may return dict with 'error' or structured results, or a plain SQL string
             if isinstance(sql_result, dict) and 'error' in sql_result:
                 intermediates.append(('error', sql_result))
+                # extract rails_status from several possible locations and emit top-level rails_status
+                try:
+                    rails_top = None
+                    if isinstance(sql_result.get('rails_status'), dict):
+                        rails_top = sql_result.get('rails_status')
+                    elif isinstance(sql_result.get('sql'), dict) and isinstance(sql_result.get('sql').get('rails_status'), dict):
+                        rails_top = sql_result.get('sql').get('rails_status')
+                    intermediates.append(('rails_status', rails_top or {'preflight_complete': False, 'filters_enforced': False, 'predicates_applied': 0, 'validator_passed': False, 'fallback_used': False, 'failure_code': sql_result.get('error')}))
+                except Exception:
+                    pass
+                # also surface prompts if provided
+                try:
+                    if isinstance(sql_result, dict) and sql_result.get('sql_llm_prompt'):
+                        intermediates.append(('sql_llm_prompt', sql_result.get('sql_llm_prompt')))
+                    if isinstance(sql_result, dict) and sql_result.get('sql_llm_output_raw'):
+                        intermediates.append(('sql_llm_output_raw', sql_result.get('sql_llm_output_raw')))
+                except Exception:
+                    pass
+                # ensure SQL LLM markers present if skipped
+                try:
+                    append_if_missing('sql_llm_prompt', "(skipped: error path)")
+                    append_if_missing('sql_llm_output_raw', "(skipped)")
+                except Exception:
+                    pass
+                # ensure unified query_exec present with error
+                try:
+                    append_if_missing('query_exec', {'engine': 'duckdb', 'binding': 'data', 'rows': 0, 'elapsed_ms': 0, 'error': f"sql_generation_error: {sql_result.get('error')}"})
+                except Exception:
+                    pass
+                # ensure insights markers present
+                try:
+                    append_if_missing('insights_llm_prompt', "(skipped: error path)")
+                    append_if_missing('insights_llm_output', f"skipped: {sql_result.get('error')}")
+                except Exception:
+                    pass
                 # do not proceed to execute
                 return {'final_answer': 'Could not generate SQL', 'intermediate_steps': intermediates}
             else:
-                sql_text = sql_result
-                intermediates.append(('sql', sql_text))
+                # sql_result may be a string or a dict containing sql info
+                # normalize to extract SQL string and rails_status if present
+                sql_str = None
+                rails_top = None
+                if isinstance(sql_result, dict):
+                    nested = sql_result.get('sql')
+                    if isinstance(nested, dict):
+                        sql_str = nested.get('sql')
+                        rails_top = nested.get('rails_status') or sql_result.get('rails_status')
+                    else:
+                        sql_str = nested if isinstance(nested, str) else None
+                        rails_top = sql_result.get('rails_status')
+                    # prefer to emit clean SQL string as the 'sql' intermediate
+                    intermediates.append(('sql', sql_str or sql_result))
+                    intermediates.append(('rails_status', rails_top))
+                    try:
+                        if 'sql_llm_prompt' in sql_result:
+                            intermediates.append(('sql_llm_prompt', sql_result.get('sql_llm_prompt')))
+                        if 'sql_llm_output_raw' in sql_result:
+                            intermediates.append(('sql_llm_output_raw', sql_result.get('sql_llm_output_raw')))
+                    except Exception:
+                        pass
+                    # set sql_text string for execution
+                    if sql_str:
+                        sql_text = sql_str
+                    elif isinstance(nested, str):
+                        sql_text = nested
+                    else:
+                        # fallback: coerce to string
+                        sql_text = str(sql_result.get('sql'))
+                else:
+                    sql_text = sql_result
+                    intermediates.append(('sql', sql_text))
+                    # ensure rails_status top-level present (none info)
+                    intermediates.append(('rails_status', None))
+                    # mark SQL LLM skipped in deterministic template path
+                    try:
+                        append_if_missing('sql_llm_prompt', "(skipped: deterministic template)")
+                        append_if_missing('sql_llm_output_raw', "(skipped)")
+                    except Exception:
+                        pass
         else:
             # 2a) Metric selection (code tool)
             metrics = metric_selection_tool.func(intent)
             intermediates.append(('metrics', metrics))
+
+            # Build and emit the plan after metrics so metrics count is accurate
+            try:
+                plan_summary = f"intent={intent} • metrics={len(metrics) if isinstance(metrics, (list,tuple)) else 0} • dims=0 • filters={len(inputs.get('filters') or {})} • engine=duckdb • table=data"
+                intermediates.append(('plan', plan_summary))
+            except Exception:
+                pass
 
             # 3) SQL generation
             sql_input = {
@@ -73,24 +165,145 @@ def build_agent(llm=None):
                 'mode': 'specialist',
             }
             sql_result = sql_generation_tool.func(sql_input)
+            # If tool signals INCOMPLETE_SQL, attempt deterministic fallback for specialist intents
             if isinstance(sql_result, dict) and 'error' in sql_result:
+                err = sql_result.get('error')
                 intermediates.append(('error', sql_result))
-                return {'final_answer': 'Could not generate SQL', 'intermediate_steps': intermediates}
+                if err == 'INCOMPLETE_SQL':
+                    # Build deterministic fallback only for specialist intents
+                    try:
+                        # Build a basic SELECT using metrics determined earlier
+                        def build_fallback(metrics_list, dims, filters_dict, kind_name):
+                            if not metrics_list:
+                                # fallback to a safe metric if none (should not happen in real flow)
+                                metrics_list = ['dollar_sales']
+                            # Build select clause: keep YOY pairs when present
+                            select_parts = []
+                            for m in metrics_list:
+                                # if metric appears to be a metric alias, just include SUM(metric) as metric
+                                select_parts.append(f"SUM({m}) AS {m}")
+                            select_clause = ', '.join(select_parts)
+                            base = f"SELECT {select_clause} FROM data"
+                            # Enforce filters using enforcer
+                            from insight_agent.sql_validator import enforce_filters
+                            sql_with_filters = enforce_filters(base + ' LIMIT 1000', filters_dict or {})
+                            # If dimensions present, add GROUP BY
+                            if dims:
+                                dims_clause = ', '.join(dims)
+                                # insert GROUP BY before LIMIT
+                                sql_with_filters = sql_with_filters.replace(' LIMIT 1000', f' GROUP BY {dims_clause} LIMIT 1000')
+                            return sql_with_filters
+
+                        fallback_sql = build_fallback(metrics, sql_input.get('dimensions') or [], sql_input.get('filters') or {}, kind)
+                        intermediates.append(('fallback_used', True))
+                        # Ensure SQL LLM markers are present (from the failed tool output) or mark as skipped
+                        try:
+                            if isinstance(sql_result, dict):
+                                append_if_missing('sql_llm_prompt', sql_result.get('sql_llm_prompt') or "(skipped: fallback)")
+                                append_if_missing('sql_llm_output_raw', sql_result.get('sql_llm_output_raw') or "(skipped)")
+                        except Exception:
+                            pass
+
+                        intermediates.append(('sql', fallback_sql))
+                        # Compute a final rails_status for the fallback SQL and emit it
+                        try:
+                            predicates_applied = fallback_sql.count('LOWER(')
+                            try:
+                                from insight_agent.sql_validator import validate_sql
+                                try:
+                                    validate_sql(fallback_sql, kind, sql_input.get('filters') or {})
+                                    validator_passed = True
+                                    failure_code = None
+                                except Exception:
+                                    validator_passed = False
+                                    failure_code = 'VALIDATION_FAILED'
+                            except Exception:
+                                validator_passed = False
+                                failure_code = 'VALIDATION_FAILED'
+
+                            rails_status_final = {
+                                'preflight_complete': True,
+                                'filters_enforced': (predicates_applied>0),
+                                'predicates_applied': predicates_applied,
+                                'validator_passed': validator_passed,
+                                'fallback_used': True,
+                                'failure_code': failure_code
+                            }
+                            intermediates.append(('rails_status', rails_status_final))
+                        except Exception:
+                            try:
+                                intermediates.append(('rails_status', {'preflight_complete': True, 'filters_enforced': True, 'predicates_applied': 0, 'validator_passed': False, 'fallback_used': True, 'failure_code': None}))
+                            except Exception:
+                                pass
+
+                        sql_text = fallback_sql
+                    except Exception as e:
+                        intermediates.append(('fallback_error', str(e)))
+                        return {'final_answer': 'Could not generate SQL', 'intermediate_steps': intermediates}
+                else:
+                    return {'final_answer': 'Could not generate SQL', 'intermediate_steps': intermediates}
             else:
                 sql_text = sql_result
                 intermediates.append(('sql', sql_text))
 
         # 4) Execute SQL against DuckDB (using existing executor)
         df = pd.DataFrame()
+        import time
+        query_exec = None
+        t0 = time.monotonic()
         try:
             df = execute_query(kind, sql_text)
-            intermediates.append(('query_result_head', df.head().to_string()))
+            t1 = time.monotonic()
+            rows = int(df.shape[0]) if hasattr(df, 'shape') else None
+            preview = df.head(3).to_dict(orient='records') if not df.empty else []
+            query_exec = {
+                'engine': 'duckdb',
+                'binding': 'data',
+                'rows': rows,
+                'elapsed_ms': int((t1 - t0) * 1000),
+                'preview': preview,
+            }
+            intermediates.append(('query_exec', query_exec))
         except Exception as e:
-            intermediates.append(('query_error', str(e)))
+            t1 = time.monotonic()
+            query_exec = {
+                'engine': 'duckdb',
+                'binding': 'data',
+                'rows': 0,
+                'elapsed_ms': int((t1 - t0) * 1000),
+                'error': str(e),
+            }
+            intermediates.append(('query_exec', query_exec))
 
         # 5) Summary
-        df_head = df.head().to_string() if not df.empty else ''
-        summary = data_synthesis_tool.func(df_head)
+        try:
+            df_head = df.head().to_string() if not df.empty else ''
+        except Exception:
+            df_head = str(df)
+
+        # Build the summary prompt and emit insights markers before/after calling the summary LLM/tool
+        try:
+            cleaned_question = question.splitlines()[-1].strip() if isinstance(question, str) else str(question)
+        except Exception:
+            cleaned_question = str(question)
+        summary_prompt = f"""Given the user's question, '{cleaned_question}', write a single, concise English sentence that summarizes the main finding in the data below.\n\n\nData:\n{df_head}\n"""
+
+        try:
+            # record the prompt as a top-level intermediate so UI always has the insights prompt
+            append_if_missing('insights_llm_prompt', summary_prompt)
+        except Exception:
+            pass
+
+        try:
+            summary = data_synthesis_tool.func(df_head)
+        except Exception as e:
+            summary = f"Error: The AI summary could not be generated: {e}"
+
+        try:
+            append_if_missing('insights_llm_output', summary)
+        except Exception:
+            pass
+
         intermediates.append(('summary', summary))
 
         return {

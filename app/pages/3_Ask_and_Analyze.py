@@ -174,7 +174,45 @@ else:
         except Exception:
             pass
         # pass selected_kind into the agent input so it can locate the correct dataset
-        agent_response = executor.invoke({"input": question, "kind": selected_kind})
+        # Build canonical filters dict and pass into agent
+        filters = {}
+        try:
+            kind_map_dir = os.path.join('domain','catalog','kinds', selected_kind)
+            mapping_file = None
+            for root, dirs, files in os.walk(kind_map_dir):
+                if 'mapping_effective.json' in files:
+                    mapping_file = os.path.join(root, 'mapping_effective.json')
+                    break
+            mapping_lookup = {}
+            if mapping_file and os.path.exists(mapping_file):
+                try:
+                    with open(mapping_file, 'r') as mf:
+                        mlist = json.load(mf)
+                        for rec in mlist:
+                            orig = (rec.get('original_name') or '').strip()
+                            canon = (rec.get('canonical_name') or orig).strip()
+                            if orig:
+                                mapping_lookup[orig.lower()] = canon
+                            if canon:
+                                mapping_lookup[canon.lower()] = canon
+                except Exception:
+                    mapping_lookup = {}
+        except Exception:
+            mapping_lookup = {}
+
+        for ui_col, ui_val in (selected_filters or {}).items():
+            if ui_val in (None, ''):
+                continue
+            canon_col = mapping_lookup.get(ui_col.lower(), ui_col)
+            filters[canon_col] = ui_val
+
+        try:
+            if os.environ.get('TEST_MODE')=='1' or st.session_state.get('debug'):
+                logger.debug(f"[ui] canonical_filters={filters}")
+        except Exception:
+            pass
+
+        agent_response = executor.invoke({"input": question, "kind": selected_kind, "filters": filters, "dimensions": []})
         # print full agent response for debugging (includes intermediate_steps)
         try:
             if os.environ.get('TEST_MODE')=='1' or st.session_state.get('debug'):
@@ -213,14 +251,102 @@ else:
             intermediates = agent_response.get('intermediate_steps') or agent_response.get('intermediates') or []
             if intermediates:
                 st.markdown('**Intermediate Steps:**')
+                # Build a mapping from step key -> observation for standardized keys
+                std = {k: v for k, v in intermediates if isinstance(k, str)}
+
+                # Helper to find top-level key or scan nested payloads
+                def find_key(kname):
+                    if kname in std:
+                        val = std.get(kname)
+                        if isinstance(val, str) and val.strip()=='':
+                            return '(empty)'
+                        return val
+                    # scan nested payloads for dicts
+                    for kk, vv in intermediates:
+                        try:
+                            if isinstance(vv, dict) and kname in vv:
+                                v = vv.get(kname)
+                                if isinstance(v, str) and v.strip()=='':
+                                    return '(empty)'
+                                return v
+                        except Exception:
+                            pass
+                    return '(empty)'
+
+                # Plan banner
+                try:
+                    st.markdown(f"**Plan:** {find_key('plan')}")
+                except Exception:
+                    pass
+
+                # Rails status strip
+                try:
+                    rails = find_key('rails_status')
+                    if isinstance(rails, str):
+                        rails_display = rails
+                    else:
+                        cols = ['preflight_complete','filters_enforced','predicates_applied','validator_passed','fallback_used','failure_code']
+                        rails_display = ' | '.join([f"{c}:{rails.get(c)}" for c in cols])
+                    st.markdown('**Rails:**')
+                    st.write(rails_display)
+                except Exception:
+                    pass
+
+                # Final SQL and execution snapshot
+                try:
+                    final_sql = find_key('sql')
+                    if isinstance(final_sql, dict):
+                        final_sql = final_sql.get('sql') or '(empty)'
+                    st.markdown('**Final SQL:**')
+                    st.code(final_sql)
+                except Exception:
+                    pass
+                try:
+                    st.markdown('**Execution Snapshot:**')
+                    qexec = find_key('query_exec')
+                    if qexec == '(empty)':
+                        qr = find_key('query_result_head')
+                        qe = find_key('query_error')
+                        if qr != '(empty)':
+                            qexec = {'engine':'duckdb','binding':'data','rows':None,'preview':qr}
+                        elif qe != '(empty)':
+                            qexec = {'engine':'duckdb','binding':'data','rows':0,'error':qe}
+                        else:
+                            qexec = '(empty)'
+                    st.write(qexec)
+                except Exception:
+                    pass
+
+                # SQL LLM prompt/output (collapsible)
+                try:
+                    with st.expander('SQL LLM Prompt / Output', expanded=False if not (os.environ.get('TEST_MODE')=='1' or st.session_state.get('debug')) else True):
+                        sql_prompt = find_key('sql_llm_prompt')
+                        sql_out = find_key('sql_llm_output_raw')
+                        st.markdown('**SQL LLM Prompt:**')
+                        st.code(sql_prompt if sql_prompt!='(empty)' else '(empty)')
+                        st.markdown('**SQL LLM Output (raw):**')
+                        st.code(sql_out if sql_out!='(empty)' else '(empty)')
+                except Exception:
+                    pass
+
+                # Insights LLM prompt/output (collapsible)
+                try:
+                    with st.expander('Insights LLM Prompt / Output', expanded=False if not (os.environ.get('TEST_MODE')=='1' or st.session_state.get('debug')) else True):
+                        ins_prompt = find_key('insights_llm_prompt')
+                        ins_out = find_key('insights_llm_output')
+                        st.markdown('**Insights LLM Prompt:**')
+                        st.code(ins_prompt if ins_prompt!='(empty)' else '(empty)')
+                        st.markdown('**Insights LLM Output (final):**')
+                        st.write(ins_out if ins_out!='(empty)' else '(empty)')
+                except Exception:
+                    pass
+
+                # Older display fallback to list all steps
+                st.write('---')
                 for i, step in enumerate(intermediates):
-                    # Each step may be a tuple (AgentAction, observation) when returned; render safely
                     try:
                         action, observation = step
-                        st.write(f"Step {i+1} - Action: {getattr(action, 'tool', str(action))}")
-                        st.write(f"Input: {getattr(action, 'tool_input', str(action))}")
-                        st.write(f"Observation: {observation}")
-                        st.write('---')
+                        st.write(f"Step {i+1} - {action}: {observation}")
                     except Exception:
                         st.write(step)
 
