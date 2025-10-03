@@ -51,14 +51,36 @@ def build_agent(llm=None):
                 'mode': 'generalist',
             }
             sql_result = sql_generation_tool.func(sql_input)
-            # enforce contract: tool returns plain SQL string on success, or dict with error
+            # enforce contract: tool returns dict with either 'error' or structured results
             if isinstance(sql_result, dict) and 'error' in sql_result:
                 intermediates.append(('error', sql_result))
+                # always emit top-level rails_status if present
+                try:
+                    rails = sql_result.get('rails_status')
+                    intermediates.append(('rails_status', rails))
+                except Exception:
+                    pass
                 # do not proceed to execute
                 return {'final_answer': 'Could not generate SQL', 'intermediate_steps': intermediates}
             else:
+                # sql_result may be a string or a dict containing sql info
                 sql_text = sql_result
                 intermediates.append(('sql', sql_text))
+                # if tool returned structured dict, emit rails_status and prompts at top-level
+                if isinstance(sql_result, dict):
+                    try:
+                        # emit rails_status as top-level for UI convenience
+                        rails = sql_result.get('rails_status')
+                        intermediates.append(('rails_status', rails))
+                    except Exception:
+                        pass
+                    try:
+                        if 'sql_llm_prompt' in sql_result:
+                            intermediates.append(('sql_llm_prompt', sql_result.get('sql_llm_prompt')))
+                        if 'sql_llm_output_raw' in sql_result:
+                            intermediates.append(('sql_llm_output_raw', sql_result.get('sql_llm_output_raw')))
+                    except Exception:
+                        pass
         else:
             # 2a) Metric selection (code tool)
             metrics = metric_selection_tool.func(intent)
