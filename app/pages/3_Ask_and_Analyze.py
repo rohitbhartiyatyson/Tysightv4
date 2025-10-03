@@ -251,14 +251,64 @@ else:
             intermediates = agent_response.get('intermediate_steps') or agent_response.get('intermediates') or []
             if intermediates:
                 st.markdown('**Intermediate Steps:**')
+                # Build a mapping from step key -> observation for standardized keys
+                std = {k: v for k, v in intermediates if isinstance(k, str)}
+
+                # Plan banner
+                try:
+                    st.markdown(f"**Plan:** {std.get('plan','')}")
+                except Exception:
+                    pass
+
+                # Rails status strip
+                try:
+                    rails = std.get('rails_status') or {}
+                    st.markdown('**Rails:**')
+                    cols = ['preflight_complete','filters_enforced','predicates_applied','validator_passed','fallback_used','failure_code']
+                    rails_str = ' | '.join([f"{c}:{rails.get(c)}" for c in cols])
+                    st.write(rails_str)
+                except Exception:
+                    pass
+
+                # Final SQL and execution snapshot
+                try:
+                    st.markdown('**Final SQL:**')
+                    st.code(std.get('sql') or std.get('sql_final') or '')
+                except Exception:
+                    pass
+                try:
+                    st.markdown('**Execution Snapshot:**')
+                    exec_snap = std.get('query_exec') or {}
+                    st.write(exec_snap)
+                except Exception:
+                    pass
+
+                # SQL LLM prompt/output (collapsible)
+                try:
+                    with st.expander('SQL LLM Prompt / Output', expanded=False if not (os.environ.get('TEST_MODE')=='1' or st.session_state.get('debug')) else True):
+                        st.markdown('**SQL LLM Prompt:**')
+                        st.code(std.get('sql_llm_prompt',''))
+                        st.markdown('**SQL LLM Output (raw):**')
+                        st.code(std.get('sql_llm_output_raw',''))
+                except Exception:
+                    pass
+
+                # Insights LLM prompt/output (collapsible)
+                try:
+                    with st.expander('Insights LLM Prompt / Output', expanded=False if not (os.environ.get('TEST_MODE')=='1' or st.session_state.get('debug')) else True):
+                        st.markdown('**Insights LLM Prompt:**')
+                        st.code(std.get('insights_llm_prompt',''))
+                        st.markdown('**Insights LLM Output (final):**')
+                        st.write(std.get('insights_llm_output',''))
+                except Exception:
+                    pass
+
+                # Older display fallback to list all steps
+                st.write('---')
                 for i, step in enumerate(intermediates):
-                    # Each step may be a tuple (AgentAction, observation) when returned; render safely
                     try:
                         action, observation = step
-                        st.write(f"Step {i+1} - Action: {getattr(action, 'tool', str(action))}")
-                        st.write(f"Input: {getattr(action, 'tool_input', str(action))}")
-                        st.write(f"Observation: {observation}")
-                        st.write('---')
+                        st.write(f"Step {i+1} - {action}: {observation}")
                     except Exception:
                         st.write(step)
 
