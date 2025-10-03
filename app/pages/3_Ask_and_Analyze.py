@@ -254,52 +254,90 @@ else:
                 # Build a mapping from step key -> observation for standardized keys
                 std = {k: v for k, v in intermediates if isinstance(k, str)}
 
+                # Helper to find top-level key or scan nested payloads
+                def find_key(kname):
+                    if kname in std:
+                        val = std.get(kname)
+                        if isinstance(val, str) and val.strip()=='':
+                            return '(empty)'
+                        return val
+                    # scan nested payloads for dicts
+                    for kk, vv in intermediates:
+                        try:
+                            if isinstance(vv, dict) and kname in vv:
+                                v = vv.get(kname)
+                                if isinstance(v, str) and v.strip()=='':
+                                    return '(empty)'
+                                return v
+                        except Exception:
+                            pass
+                    return '(empty)'
+
                 # Plan banner
                 try:
-                    st.markdown(f"**Plan:** {std.get('plan','')}")
+                    st.markdown(f"**Plan:** {find_key('plan')}")
                 except Exception:
                     pass
 
                 # Rails status strip
                 try:
-                    rails = std.get('rails_status') or {}
+                    rails = find_key('rails_status')
+                    if isinstance(rails, str):
+                        rails_display = rails
+                    else:
+                        cols = ['preflight_complete','filters_enforced','predicates_applied','validator_passed','fallback_used','failure_code']
+                        rails_display = ' | '.join([f"{c}:{rails.get(c)}" for c in cols])
                     st.markdown('**Rails:**')
-                    cols = ['preflight_complete','filters_enforced','predicates_applied','validator_passed','fallback_used','failure_code']
-                    rails_str = ' | '.join([f"{c}:{rails.get(c)}" for c in cols])
-                    st.write(rails_str)
+                    st.write(rails_display)
                 except Exception:
                     pass
 
                 # Final SQL and execution snapshot
                 try:
+                    final_sql = find_key('sql')
+                    if isinstance(final_sql, dict):
+                        final_sql = final_sql.get('sql') or '(empty)'
                     st.markdown('**Final SQL:**')
-                    st.code(std.get('sql') or std.get('sql_final') or '')
+                    st.code(final_sql)
                 except Exception:
                     pass
                 try:
                     st.markdown('**Execution Snapshot:**')
-                    exec_snap = std.get('query_exec') or {}
-                    st.write(exec_snap)
+                    qexec = find_key('query_exec')
+                    if qexec == '(empty)':
+                        qr = find_key('query_result_head')
+                        qe = find_key('query_error')
+                        if qr != '(empty)':
+                            qexec = {'engine':'duckdb','binding':'data','rows':None,'preview':qr}
+                        elif qe != '(empty)':
+                            qexec = {'engine':'duckdb','binding':'data','rows':0,'error':qe}
+                        else:
+                            qexec = '(empty)'
+                    st.write(qexec)
                 except Exception:
                     pass
 
                 # SQL LLM prompt/output (collapsible)
                 try:
                     with st.expander('SQL LLM Prompt / Output', expanded=False if not (os.environ.get('TEST_MODE')=='1' or st.session_state.get('debug')) else True):
+                        sql_prompt = find_key('sql_llm_prompt')
+                        sql_out = find_key('sql_llm_output_raw')
                         st.markdown('**SQL LLM Prompt:**')
-                        st.code(std.get('sql_llm_prompt',''))
+                        st.code(sql_prompt if sql_prompt!='(empty)' else '(empty)')
                         st.markdown('**SQL LLM Output (raw):**')
-                        st.code(std.get('sql_llm_output_raw',''))
+                        st.code(sql_out if sql_out!='(empty)' else '(empty)')
                 except Exception:
                     pass
 
                 # Insights LLM prompt/output (collapsible)
                 try:
                     with st.expander('Insights LLM Prompt / Output', expanded=False if not (os.environ.get('TEST_MODE')=='1' or st.session_state.get('debug')) else True):
+                        ins_prompt = find_key('insights_llm_prompt')
+                        ins_out = find_key('insights_llm_output')
                         st.markdown('**Insights LLM Prompt:**')
-                        st.code(std.get('insights_llm_prompt',''))
+                        st.code(ins_prompt if ins_prompt!='(empty)' else '(empty)')
                         st.markdown('**Insights LLM Output (final):**')
-                        st.write(std.get('insights_llm_output',''))
+                        st.write(ins_out if ins_out!='(empty)' else '(empty)')
                 except Exception:
                     pass
 

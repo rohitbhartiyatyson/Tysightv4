@@ -205,18 +205,7 @@ Respond with EXACTLY one JSON object with key 'sql'."""
         # If not complete and we are in specialist mode, keep a marker to allow fallback upstream
         mode_local = locals().get('mode', 'specialist')
         if not complete:
-            if mode_local == 'generalist':
-                # build a rails status
-                rails_status = {
-                    'preflight_complete': False,
-                    'filters_enforced': False,
-                    'predicates_applied': 0,
-                    'validator_passed': False,
-                    'fallback_used': False,
-                    'failure_code': 'INCOMPLETE_SQL'
-                }
-                return {"error": "INCOMPLETE_SQL: your question did not specify what to calculate; try 'dollar sales by ...' or select a template.", "rails_status": rails_status, "sql_llm_prompt": sql_llm_prompt, "sql_llm_output_raw": sql_llm_output_raw}
-            # signal upstream (agent) by returning a sentinel dict; agent will attempt fallback for specialist intents
+            # Build rails_status even on incomplete SQL so caller can record it
             rails_status = {
                 'preflight_complete': False,
                 'filters_enforced': False,
@@ -225,6 +214,9 @@ Respond with EXACTLY one JSON object with key 'sql'."""
                 'fallback_used': False,
                 'failure_code': 'INCOMPLETE_SQL'
             }
+            if mode_local == 'generalist':
+                return {"error": "INCOMPLETE_SQL: your question did not specify what to calculate; try 'dollar sales by ...' or select a template.", "rails_status": rails_status, "sql_llm_prompt": sql_llm_prompt, "sql_llm_output_raw": sql_llm_output_raw}
+            # signal upstream (agent) by returning a sentinel dict; agent will attempt fallback for specialist intents
             return {"error": "INCOMPLETE_SQL", "rails_status": rails_status, "sql_llm_prompt": sql_llm_prompt, "sql_llm_output_raw": sql_llm_output_raw}
 
         # Only apply normalization/filters/validation when the SQL is complete
