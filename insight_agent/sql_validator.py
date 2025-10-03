@@ -97,6 +97,81 @@ def normalize_sql(sql: str, kind: str) -> str:
     return sql
 
 
+def _escape_literal(val: str) -> str:
+    return str(val).replace("'", "''")
+
+
+def enforce_filters(sql: str, filters: dict) -> str:
+    """Ensure provided filters appear in the SQL as case-insensitive predicates.
+
+    - If filters is empty, return the original SQL
+    - If filters non-empty and SQL lacks WHERE, insert one before GROUP BY/ORDER BY/HAVING
+    - If SQL has WHERE, append AND (...)
+    - Builds case-insensitive predicates using LOWER(col) = LOWER('val') or LOWER(col) IN (...)
+    - Escapes single quotes in values
+    - Preserves existing LIMIT clause (re-appends if necessary)
+    """
+    if not filters:
+        return sql
+
+    orig = sql or ''
+    s = orig.strip()
+    trailing_semicolon = s.endswith(';')
+    if trailing_semicolon:
+        s = s[:-1].rstrip()
+
+    # Extract LIMIT clause if present
+    limit_match = re.search(r"(?i)\blimit\s+\d+\b", s)
+    limit_clause = ''
+    if limit_match:
+        limit_start = limit_match.start()
+        limit_clause = s[limit_start:]
+        s = s[:limit_start].rstrip()
+
+    # Insert position before GROUP BY / ORDER BY / HAVING
+    m = re.search(r"(?i)\b(group\s+by|order\s+by|having)\b", s)
+    insert_pos = m.start() if m else len(s)
+
+    preds = []
+    for col, val in filters.items():
+        if val in (None, ''):
+            continue
+        canon_col = _canonical_style(col)
+        if isinstance(val, (list, tuple)):
+            items = [f"LOWER('{_escape_literal(v)}')" for v in val if v not in (None, '')]
+            if not items:
+                continue
+            preds.append(f"LOWER({canon_col}) IN ({', '.join(items)})")
+        else:
+            preds.append(f"LOWER({canon_col}) = LOWER('{_escape_literal(val)}')")
+
+    if not preds:
+        return orig
+
+    predicates_str = ' AND '.join([f"({p})" for p in preds])
+
+    head = s[:insert_pos]
+    tail = s[insert_pos:]
+
+    if re.search(r"(?i)\bwhere\b", head):
+        new_head = head + ' AND ' + '(' + predicates_str + ')'
+    else:
+        new_head = head + ' WHERE ' + '(' + predicates_str + ')'
+
+    final = new_head + tail
+    if limit_clause:
+        final = final.rstrip() + ' ' + limit_clause
+    else:
+        final = final.rstrip() + ' LIMIT 1000'
+
+    if trailing_semicolon:
+        final = final + ';'
+
+    return final
+
+
+
+
 class ValidationError(Exception):
     pass
 
