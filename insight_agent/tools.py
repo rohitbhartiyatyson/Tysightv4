@@ -29,6 +29,8 @@ def sql_generation_tool(input_data) -> str:
         return "Error: LITELLM_API_KEY is not set. Please create a .env file with your API key."
 
     # Accept raw prompt strings for backward compatibility
+    filters = {}
+
     if isinstance(input_data, str):
         prompt = input_data
     else:
