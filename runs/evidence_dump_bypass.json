@@ -1,0 +1,76 @@
+{
+  "final_answer": "The data show total dollar sales of about $457.3 million, roughly 37.36 million units sold, and approximately 72.86 million in volume sales.",
+  "intermediate_steps": [
+    [
+      "intent",
+      {
+        "intent": "sales_performance",
+        "entities": {}
+      }
+    ],
+    [
+      "metrics",
+      [
+        "dollar_sales",
+        "unit_sales",
+        "volume_sales"
+      ]
+    ],
+    [
+      "plan",
+      "intent=sales_performance \u2022 metrics=3 \u2022 dims=0 \u2022 filters=4 \u2022 engine=duckdb \u2022 table=data"
+    ],
+    [
+      "sql",
+      "SELECT SUM(dollar_sales) AS dollar_sales, SUM(unit_sales) AS unit_sales, SUM(volume_sales) AS volume_sales FROM data WHERE ((LOWER(market) = LOWER('Total US xAOC')) AND (LOWER(time_agg) = LOWER('Latest 52 Wks - w/e 08/16/25')) AND (LOWER(category) = LOWER('BACON')) AND (LOWER(brand) = LOWER('WRIGHT'))) LIMIT 1000"
+    ],
+    [
+      "rails_status",
+      {
+        "preflight_complete": true,
+        "filters_enforced": true,
+        "predicates_applied": 8,
+        "validator_passed": true,
+        "fallback_used": false,
+        "specialist_bypass": true,
+        "failure_code": null
+      }
+    ],
+    [
+      "sql_llm_prompt",
+      "(skipped: deterministic template)"
+    ],
+    [
+      "sql_llm_output_raw",
+      "(skipped)"
+    ],
+    [
+      "query_exec",
+      {
+        "engine": "duckdb",
+        "binding": "data",
+        "rows": 1,
+        "elapsed_ms": 12,
+        "preview": [
+          {
+            "dollar_sales": 457318428.7,
+            "unit_sales": 37358227.77,
+            "volume_sales": 72862783.19
+          }
+        ]
+      }
+    ],
+    [
+      "insights_llm_prompt",
+      "Given the user's question, 'summarize the performance', write a single, concise English sentence that summarizes the main finding in the data below.\n\n\nData:\n   dollar_sales   unit_sales  volume_sales\n0   457318428.7  37358227.77   72862783.19\n"
+    ],
+    [
+      "insights_llm_output",
+      "The data show total dollar sales of about $457.3 million, roughly 37.36 million units sold, and approximately 72.86 million in volume sales."
+    ],
+    [
+      "summary",
+      "The data show total dollar sales of about $457.3 million, roughly 37.36 million units sold, and approximately 72.86 million in volume sales."
+    ]
+  ]
+}
