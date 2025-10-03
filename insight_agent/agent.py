@@ -146,11 +146,32 @@ def build_agent(llm=None):
 
         # 4) Execute SQL against DuckDB (using existing executor)
         df = pd.DataFrame()
+        import time
+        query_exec = None
+        t0 = time.monotonic()
         try:
             df = execute_query(kind, sql_text)
-            intermediates.append(('query_result_head', df.head().to_string()))
+            t1 = time.monotonic()
+            rows = int(df.shape[0]) if hasattr(df, 'shape') else None
+            preview = df.head(3).to_dict(orient='records') if not df.empty else []
+            query_exec = {
+                'engine': 'duckdb',
+                'binding': 'data',
+                'rows': rows,
+                'elapsed_ms': int((t1 - t0) * 1000),
+                'preview': preview,
+            }
+            intermediates.append(('query_exec', query_exec))
         except Exception as e:
-            intermediates.append(('query_error', str(e)))
+            t1 = time.monotonic()
+            query_exec = {
+                'engine': 'duckdb',
+                'binding': 'data',
+                'rows': 0,
+                'elapsed_ms': int((t1 - t0) * 1000),
+                'error': str(e),
+            }
+            intermediates.append(('query_exec', query_exec))
 
         # 5) Summary
         df_head = df.head().to_string() if not df.empty else ''
