@@ -8,6 +8,7 @@ from insight_agent.tools import (
 from insight_agent.query_executor import execute_query
 import pandas as pd
 import json
+from insight_agent.llm_client import get_summary_from_df
 
 
 def build_agent(llm=None):
@@ -195,7 +196,46 @@ def build_agent(llm=None):
 
                         fallback_sql = build_fallback(metrics, sql_input.get('dimensions') or [], sql_input.get('filters') or {}, kind)
                         intermediates.append(('fallback_used', True))
+                        # Ensure SQL LLM markers are present (from the failed tool output) or mark as skipped
+                        try:
+                            if isinstance(sql_result, dict):
+                                append_if_missing('sql_llm_prompt', sql_result.get('sql_llm_prompt') or "(skipped: fallback)")
+                                append_if_missing('sql_llm_output_raw', sql_result.get('sql_llm_output_raw') or "(skipped)")
+                        except Exception:
+                            pass
+
                         intermediates.append(('sql', fallback_sql))
+                        # Compute a final rails_status for the fallback SQL and emit it
+                        try:
+                            predicates_applied = fallback_sql.count('LOWER(')
+                            try:
+                                from insight_agent.sql_validator import validate_sql
+                                try:
+                                    validate_sql(fallback_sql, kind, sql_input.get('filters') or {})
+                                    validator_passed = True
+                                    failure_code = None
+                                except Exception:
+                                    validator_passed = False
+                                    failure_code = 'VALIDATION_FAILED'
+                            except Exception:
+                                validator_passed = False
+                                failure_code = 'VALIDATION_FAILED'
+
+                            rails_status_final = {
+                                'preflight_complete': True,
+                                'filters_enforced': (predicates_applied>0),
+                                'predicates_applied': predicates_applied,
+                                'validator_passed': validator_passed,
+                                'fallback_used': True,
+                                'failure_code': failure_code
+                            }
+                            intermediates.append(('rails_status', rails_status_final))
+                        except Exception:
+                            try:
+                                intermediates.append(('rails_status', {'preflight_complete': True, 'filters_enforced': True, 'predicates_applied': 0, 'validator_passed': False, 'fallback_used': True, 'failure_code': None}))
+                            except Exception:
+                                pass
+
                         sql_text = fallback_sql
                     except Exception as e:
                         intermediates.append(('fallback_error', str(e)))
@@ -236,8 +276,34 @@ def build_agent(llm=None):
             intermediates.append(('query_exec', query_exec))
 
         # 5) Summary
-        df_head = df.head().to_string() if not df.empty else ''
-        summary = data_synthesis_tool.func(df_head)
+        try:
+            df_head = df.head().to_string() if not df.empty else ''
+        except Exception:
+            df_head = str(df)
+
+        # Build the summary prompt and emit insights markers before/after calling the summary LLM/tool
+        try:
+            cleaned_question = question.splitlines()[-1].strip() if isinstance(question, str) else str(question)
+        except Exception:
+            cleaned_question = str(question)
+        summary_prompt = f"""Given the user's question, '{cleaned_question}', write a single, concise English sentence that summarizes the main finding in the data below.\n\n\nData:\n{df_head}\n"""
+
+        try:
+            # record the prompt as a top-level intermediate so UI always has the insights prompt
+            append_if_missing('insights_llm_prompt', summary_prompt)
+        except Exception:
+            pass
+
+        try:
+            summary = data_synthesis_tool.func(df_head)
+        except Exception as e:
+            summary = f"Error: The AI summary could not be generated: {e}"
+
+        try:
+            append_if_missing('insights_llm_output', summary)
+        except Exception:
+            pass
+
         intermediates.append(('summary', summary))
 
         return {
