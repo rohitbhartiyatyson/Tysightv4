@@ -191,20 +191,26 @@ Respond with EXACTLY one JSON object with key 'sql'."""
         except Exception:
             sql_text = ''
 
-    # Post-process SQL to enforce rails: canonicalization, symmetric LOWER, table whitelist, etc.
+    # Preflight completeness: ensure candidate SQL contains SELECT ... FROM
     try:
-        from insight_agent.sql_validator import normalize_sql, validate_sql, enforce_filters
+        from insight_agent.sql_validator import is_sql_complete, normalize_sql, validate_sql, enforce_filters
         kind_local = locals().get('kind', '')
-        # Only attempt normalization/validation when a kind is provided
-        if kind_local:
-            # First normalize style
+        # Run preflight completeness only when a kind is provided (we still want to validate even without kind in some tests)
+        complete = is_sql_complete(sql_text)
+        # If not complete and we are in specialist mode, keep a marker to allow fallback upstream
+        mode_local = locals().get('mode', 'specialist')
+        if not complete:
+            if mode_local == 'generalist':
+                return {"error": "INCOMPLETE_SQL: your question did not specify what to calculate; try 'dollar sales by ...' or select a template."}
+            # signal upstream (agent) by returning a sentinel dict; agent will attempt fallback for specialist intents
+            return {"error": "INCOMPLETE_SQL"}
+
+        # Only apply normalization/filters/validation when the SQL is complete
+        if kind_local and complete:
             sql_text = normalize_sql(sql_text, kind_local)
-            # Enforce filters into SQL before validation
             sql_text = enforce_filters(sql_text, filters or {})
-            # Validate and ensure filters were applied
             validate_sql(sql_text, kind_local, filters or {})
     except Exception as e:
-        # return a structured error dict so callers can detect failures
         return {"error": str(e)}
 
     return sql_text

@@ -97,6 +97,19 @@ def normalize_sql(sql: str, kind: str) -> str:
     return sql
 
 
+
+def is_sql_complete(sql: str) -> bool:
+    """Return True if SQL contains a SELECT ... FROM pattern (case-insensitive), False otherwise.
+
+    This is a light preflight check used to detect incomplete model outputs like "WHERE ... LIMIT ...".
+    """
+    if not sql or not str(sql).strip():
+        return False
+    # Ensure SELECT appears before FROM (ignore case, across lines)
+    return bool(re.search(r'(?is)\bselect\b.*\bfrom\b', sql))
+
+
+
 def _escape_literal(val: str) -> str:
     return str(val).replace("'", "''")
 
