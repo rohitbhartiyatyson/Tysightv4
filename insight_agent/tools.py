@@ -120,7 +120,7 @@ OUTPUT:
 Return EXACTLY one JSON object with key 'sql' and the SQL string as its value.
 
 EXAMPLE:
-{"sql": "SELECT SUM(dollar_sales) AS dollar_sales, SUM(unit_sales) AS unit_sales, SUM(volume_sales) AS volume_sales FROM data WHERE LOWER(market)=LOWER('total us xaoc') AND LOWER(time_agg)=LOWER('latest 52 wks - w/e 08/16/25') LIMIT 1000"}
+{{"sql": "SELECT SUM(dollar_sales) AS dollar_sales, SUM(unit_sales) AS unit_sales, SUM(volume_sales) AS volume_sales FROM data WHERE LOWER(market)=LOWER('total us xaoc') AND LOWER(time_agg)=LOWER('latest 52 wks - w/e 08/16/25') LIMIT 1000"}}
 """
 
         specialist_prompt = """You are a SQL generator for analytical intents.
