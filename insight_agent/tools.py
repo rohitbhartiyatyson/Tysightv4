@@ -191,23 +191,23 @@ Respond with EXACTLY one JSON object with key 'sql'."""
         except Exception:
             sql_text = ''
 
-            # Post-process SQL to enforce rails: canonicalization, symmetric LOWER, table whitelist, etc.
-        try:
-            from insight_agent.sql_validator import normalize_sql, validate_sql, enforce_filters
-            kind_local = locals().get('kind', '')
-            # Only attempt normalization/validation when a kind is provided
-            if kind_local:
-                # First normalize style
-                sql_text = normalize_sql(sql_text, kind_local)
-                # Enforce filters into SQL before validation
-                sql_text = enforce_filters(sql_text, filters or {})
-                # Validate and ensure filters were applied
-                validate_sql(sql_text, kind_local, filters or {})
-        except Exception as e:
-            # return a structured error dict so callers can detect failures
-            return {"error": str(e)}
+    # Post-process SQL to enforce rails: canonicalization, symmetric LOWER, table whitelist, etc.
+    try:
+        from insight_agent.sql_validator import normalize_sql, validate_sql, enforce_filters
+        kind_local = locals().get('kind', '')
+        # Only attempt normalization/validation when a kind is provided
+        if kind_local:
+            # First normalize style
+            sql_text = normalize_sql(sql_text, kind_local)
+            # Enforce filters into SQL before validation
+            sql_text = enforce_filters(sql_text, filters or {})
+            # Validate and ensure filters were applied
+            validate_sql(sql_text, kind_local, filters or {})
+    except Exception as e:
+        # return a structured error dict so callers can detect failures
+        return {"error": str(e)}
 
-        return sql_text
+    return sql_text
 
 @tool
 def data_synthesis_tool(input_text: str) -> str:
